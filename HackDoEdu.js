@@ -45,7 +45,7 @@
                 cursor: grab; z-index: 10000; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
                 user-select: none;
             }
-            .hidden { display: none; }
+            .hidden { display: none !important; }
         `;
         document.head.appendChild(style);
     }
@@ -114,28 +114,38 @@
 
             let isDragging = false, offsetX, offsetY;
 
-            icon.addEventListener("touchstart", (e) => {
+            function startDrag(e) {
                 isDragging = true;
-                const touch = e.touches[0];
-                offsetX = touch.clientX - icon.offsetLeft;
-                offsetY = touch.clientY - icon.offsetTop;
+                let clientX = e.clientX || e.touches[0].clientX;
+                let clientY = e.clientY || e.touches[0].clientY;
+                offsetX = clientX - icon.getBoundingClientRect().left;
+                offsetY = clientY - icon.getBoundingClientRect().top;
                 icon.style.cursor = "grabbing";
-            });
+            }
 
-            document.addEventListener("touchmove", (e) => {
+            function moveDrag(e) {
                 if (isDragging) {
-                    const touch = e.touches[0];
-                    icon.style.left = (touch.clientX - offsetX) + "px";
-                    icon.style.top = (touch.clientY - offsetY) + "px";
+                    let clientX = e.clientX || e.touches[0].clientX;
+                    let clientY = e.clientY || e.touches[0].clientY;
+                    icon.style.left = (clientX - offsetX) + "px";
+                    icon.style.top = (clientY - offsetY) + "px";
                     icon.style.bottom = "auto";
                     icon.style.right = "auto";
                 }
-            });
+            }
 
-            document.addEventListener("touchend", () => {
+            function stopDrag() {
                 isDragging = false;
                 icon.style.cursor = "grab";
-            });
+            }
+
+            icon.addEventListener("mousedown", startDrag);
+            document.addEventListener("mousemove", moveDrag);
+            document.addEventListener("mouseup", stopDrag);
+
+            icon.addEventListener("touchstart", startDrag);
+            document.addEventListener("touchmove", moveDrag);
+            document.addEventListener("touchend", stopDrag);
         } else {
             icon.classList.remove("hidden");
         }
@@ -144,4 +154,4 @@
     injectStyles();
     showToastAndMenu();
 })();
-                
+                                          
