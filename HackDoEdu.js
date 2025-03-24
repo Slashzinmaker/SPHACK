@@ -69,32 +69,35 @@
             .menu-option {
                 margin: 10px 0;
                 display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-
-            .menu-option label {
-                flex-grow: 1;
+                flex-direction: column;
                 text-align: left;
             }
 
+            .menu-option label {
+                margin-bottom: 5px;
+            }
+
             .menu-option input {
-                transform: scale(1.2);
+                padding: 8px;
+                width: 100%;
+                border-radius: 5px;
+                border: none;
+                font-size: 14px;
             }
 
             .close-btn, .confirm-btn {
                 background: red;
                 color: white;
                 border: none;
-                padding: 5px 10px;
+                padding: 8px 10px;
                 margin-top: 10px;
                 cursor: pointer;
                 border-radius: 5px;
+                width: 100%;
             }
 
             .confirm-btn {
                 background: green;
-                margin-left: 10px;
             }
         `;
         document.head.appendChild(style);
@@ -119,16 +122,12 @@
         menu.innerHTML = `
             <h2>HypexScripts</h2>
             <div class="menu-option">
-                <label>Leia SP</label>
-                <input type="checkbox" id="plataforma1">
+                <label for="ra">RA</label>
+                <input type="text" id="ra">
             </div>
             <div class="menu-option">
-                <label>Tarefas SP</label>
-                <input type="checkbox" id="plataforma2">
-            </div>
-            <div class="menu-option">
-                <label>Redação SP</label>
-                <input type="checkbox" id="plataforma3">
+                <label for="senha">Senha</label>
+                <input type="password" id="senha">
             </div>
             <button class="confirm-btn">Confirmar</button>
             <button class="close-btn">Fechar</button>
@@ -141,11 +140,24 @@
         });
 
         document.querySelector(".confirm-btn").addEventListener("click", () => {
-            const plataforma1 = document.getElementById("plataforma1").checked;
-            const plataforma2 = document.getElementById("plataforma2").checked;
-            const plataforma3 = document.getElementById("plataforma3").checked;
+            const raValue = document.getElementById("ra").value;
+            const senhaValue = document.getElementById("senha").value;
 
-            alert(`Leia SP: ${plataforma1 ? "Ativada" : "Desativada"}\nTarefas SP: ${plataforma2 ? "Ativada" : "Desativada"}\nRedação SP: ${plataforma3 ? "Ativada" : "Desativada"}`);
+            if (raValue && senhaValue) {
+                const raField = document.querySelector("input[name='ra']") || document.querySelector("#raField");
+                const senhaField = document.querySelector("input[name='senha']") || document.querySelector("#senhaField");
+
+                if (raField && senhaField) {
+                    raField.value = raValue;
+                    senhaField.value = senhaValue;
+                    alert("Dados inseridos com sucesso!");
+                } else {
+                    alert("Erro: Não foi possível encontrar os campos de login no site.");
+                }
+            } else {
+                alert("Por favor, preencha todos os campos!");
+            }
+
             menu.remove();
         });
     }
