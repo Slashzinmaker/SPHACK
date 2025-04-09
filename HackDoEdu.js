@@ -299,7 +299,7 @@ class RateLimitedQueue {
 }
 
 async function verificarPaginas() {
-    alert('Script Feito Por Eduardo Safra');
+    console.log('Script Feito Por Eduardo Safra');
     
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999;';
@@ -360,7 +360,9 @@ async function verificarPaginas() {
         
         try {
             await do_exam(exam.href);
-        } catch (error) {}
+        } catch (error) {
+            console.error('Erro ao processar exame:', error);
+        }
         
         if (i < examCount - 1) {
             await new Promise(resolve => setTimeout(resolve, 3000));
@@ -368,7 +370,7 @@ async function verificarPaginas() {
     }
     
     document.body.removeChild(overlay);
-    alert('Atividades Finalizadas! | Caso Sobrar alguma execute denovo');
+    console.log('Atividades Finalizadas! | Caso Sobrar alguma execute denovo');
     location.reload();
 }
 
