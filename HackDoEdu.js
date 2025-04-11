@@ -298,7 +298,7 @@ class RateLimitedQueue {
     }
 }
 
-// Função para mostrar toasts estilizados
+// Função para mostrar toasts estilizados com barra de progresso
 function showToast(message, type = 'info', duration = 5000) {
     // Criar container se não existir
     const toastContainer = document.getElementById('toast-container') || (() => {
@@ -319,17 +319,18 @@ function showToast(message, type = 'info', duration = 5000) {
 
     // Criar o toast
     const toast = document.createElement('div');
+    toast.classList.add('toast');
     toast.style.cssText = `
         background: #333;
         color: white;
         padding: 12px 16px;
-        border-radius: 4px;
+        border-radius: 6px;
         font-size: 14px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         opacity: 0;
         transform: translateX(20px);
         transition: all 0.3s ease;
-        max-width: 250px;
+        max-width: 300px;
         position: relative;
         overflow: hidden;
     `;
@@ -340,31 +341,31 @@ function showToast(message, type = 'info', duration = 5000) {
         position: absolute;
         bottom: 0;
         left: 0;
-        height: 3px;
+        height: 4px;
         width: 100%;
         background: #6c5ce7;
         transform-origin: left;
         animation: progress ${duration}ms linear forwards;
     `;
 
-    // Adicionar elementos
     toast.textContent = message;
     toast.appendChild(progressBar);
     toastContainer.appendChild(toast);
 
     // Animação de entrada
-    setTimeout(() => {
+    requestAnimationFrame(() => {
         toast.style.opacity = '1';
         toast.style.transform = 'translateX(0)';
-    }, 10);
+    });
 
-    // Remover após a duração
+    // Remover após duração
     setTimeout(() => {
         toast.style.opacity = '0';
+        toast.style.transform = 'translateX(20px)';
         setTimeout(() => toast.remove(), 300);
     }, duration);
 
-    // Adicionar estilos dinamicamente (apenas uma vez)
+    // Inserir estilos globais apenas uma vez
     if (!document.getElementById('toast-styles')) {
         const style = document.createElement('style');
         style.id = 'toast-styles';
@@ -373,12 +374,12 @@ function showToast(message, type = 'info', duration = 5000) {
                 from { transform: scaleX(1); }
                 to { transform: scaleX(0); }
             }
-            
+
             .toast-success { background: #28a745 !important; }
             .toast-error { background: #dc3545 !important; }
             .toast-warning { background: #ffc107 !important; color: #000 !important; }
             .toast-info { background: #17a2b8 !important; }
-            
+
             .toast-success div { background: #218838 !important; }
             .toast-error div { background: #c82333 !important; }
             .toast-warning div { background: #e0a800 !important; }
@@ -387,11 +388,12 @@ function showToast(message, type = 'info', duration = 5000) {
         document.head.appendChild(style);
     }
 
-    // Adicionar classe de tipo
-    if (type !== 'info') {
+    // Adicionar classe conforme tipo
+    if (type) {
         toast.classList.add(`toast-${type}`);
     }
 }
+
 
 async function verificarPaginas() {
     console.log('Script Feito Por Eduardo Safra');
