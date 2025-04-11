@@ -298,17 +298,16 @@ class RateLimitedQueue {
     }
 }
 
-// Função para criar e mostrar toasts
-function showToast(message, type = 'info', duration = 3000) {
+// Função para criar e mostrar toasts estilizados
+function showToast(message, type = 'info', duration = 5000) {
     const toastContainer = document.getElementById('toast-container') || createToastContainer();
     
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
-        <div class="toast-content">
-            <div class="toast-message">${message}</div>
-            <div class="toast-progress"></div>
-        </div>
+        <div class="toast-icon"></div>
+        <div class="toast-message">${message}</div>
+        <div class="toast-progress"></div>
     `;
     
     toastContainer.appendChild(toast);
@@ -331,13 +330,13 @@ function showToast(message, type = 'info', duration = 3000) {
     progress.style.animation = `progress ${duration}ms linear forwards`;
 }
 
-// Função para criar o container de toasts se não existir
+// Função para criar o container de toasts com estilos modernos
 function createToastContainer() {
     const toastContainer = document.createElement('div');
     toastContainer.id = 'toast-container';
     document.body.appendChild(toastContainer);
     
-    // Adicionar estilos CSS
+    // Adicionar estilos CSS melhorados
     const style = document.createElement('style');
     style.textContent = `
         #toast-container {
@@ -347,42 +346,48 @@ function createToastContainer() {
             z-index: 9999;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
+            pointer-events: none;
         }
         
         .toast {
-            background: #333;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
             color: white;
             padding: 12px 16px;
-            border-radius: 4px;
+            border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             opacity: 0;
-            transform: translateX(100%);
-            transition: all 0.3s ease;
-            max-width: 300px;
+            transform: translateY(20px);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            max-width: 250px;
             overflow: hidden;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
         .toast.show {
             opacity: 1;
-            transform: translateX(0);
+            transform: translateY(0);
         }
         
         .toast-success {
-            background: #28a745;
+            background: rgba(40, 167, 69, 0.9);
         }
         
         .toast-error {
-            background: #dc3545;
+            background: rgba(220, 53, 69, 0.9);
         }
         
         .toast-warning {
-            background: #ffc107;
+            background: rgba(255, 193, 7, 0.9);
             color: #212529;
         }
         
         .toast-info {
-            background: #17a2b8;
+            background: rgba(23, 162, 184, 0.9);
         }
         
         .toast-progress {
@@ -391,16 +396,35 @@ function createToastContainer() {
             left: 0;
             height: 3px;
             width: 100%;
-            background: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.4);
+            transform-origin: left;
         }
         
         @keyframes progress {
-            from { width: 100%; }
-            to { width: 0%; }
+            from { transform: scaleX(1); }
+            to { transform: scaleX(0); }
         }
         
-        .toast-message {
-            margin-bottom: 5px;
+        .toast-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        
+        .toast-success .toast-icon {
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+        }
+        
+        .toast-error .toast-icon {
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/%3E%3C/svg%3E");
+        }
+        
+        .toast-warning .toast-icon {
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z'/%3E%3C/svg%3E");
+        }
+        
+        .toast-info .toast-icon {
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z'/%3E%3C/svg%3E");
         }
     `;
     document.head.appendChild(style);
