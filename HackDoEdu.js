@@ -298,118 +298,99 @@ class RateLimitedQueue {
     }
 }
 
-// Função para criar e mostrar toasts estilizados
+// Função para mostrar toasts estilizados
 function showToast(message, type = 'info', duration = 5000) {
-    const toastContainer = document.getElementById('toast-container') || createToastContainer();
-    
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `
-        <span class="toast-message">${message}</span>
-        <div class="progress">
-            <div class="progress-bar"></div>
-        </div>
-    `;
-    
-    toastContainer.appendChild(toast);
-    
-    // Animação de entrada
-    setTimeout(() => {
-        toast.classList.add('show');
-    }, 10);
-    
-    // Barra de progresso - reinicia animação
-    const progressBar = toast.querySelector('.progress-bar');
-    progressBar.style.animation = 'none';
-    void progressBar.offsetWidth; // força reflow
-    progressBar.style.animation = `progressBar ${duration}ms linear forwards`;
-    
-    // Remover após a duração
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => {
-            toast.remove();
-        }, 300);
-    }, duration);
-}
-
-// Função para criar o container de toasts com o estilo especificado
-function createToastContainer() {
-    const toastContainer = document.createElement('div');
-    toastContainer.id = 'toast-container';
-    document.body.appendChild(toastContainer);
-    
-    // Adicionar estilos CSS conforme seu exemplo
-    const style = document.createElement('style');
-    style.textContent = `
-        #toast-container {
+    // Criar container se não existir
+    const toastContainer = document.getElementById('toast-container') || (() => {
+        const container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
             z-index: 9999;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-        }
-        
-        .toast {
-            position: relative;
-            background: #333;
-            color: #fff;
-            padding: 16px 24px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
-            opacity: 0;
-            transform: translateY(-20px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            max-width: 300px;
-        }
-        
-        .toast.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        
-        .toast .progress {
-            margin-top: 10px;
-            height: 4px;
-            width: 100%;
-            background: rgba(255,255,255,0.2);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        
-        .toast .progress-bar {
-            height: 100%;
-            width: 100%;
-            background: #6c5ce7;
-        }
-        
-        @keyframes progressBar {
-            from { width: 100%; }
-            to { width: 0%; }
-        }
-        
-        /* Cores para diferentes tipos de toast */
-        .toast-success .progress-bar {
-            background: #28a745;
-        }
-        
-        .toast-error .progress-bar {
-            background: #dc3545;
-        }
-        
-        .toast-warning .progress-bar {
-            background: #ffc107;
-        }
-        
-        .toast-info .progress-bar {
-            background: #17a2b8;
-        }
+            gap: 8px;
+        `;
+        document.body.appendChild(container);
+        return container;
+    })();
+
+    // Criar o toast
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        background: #333;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 4px;
+        font-size: 14px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        opacity: 0;
+        transform: translateX(20px);
+        transition: all 0.3s ease;
+        max-width: 250px;
+        position: relative;
+        overflow: hidden;
     `;
-    document.head.appendChild(style);
-    
-    return toastContainer;
+
+    // Barra de progresso
+    const progressBar = document.createElement('div');
+    progressBar.style.cssText = `
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        height: 3px;
+        width: 100%;
+        background: #6c5ce7;
+        transform-origin: left;
+        animation: progress ${duration}ms linear forwards;
+    `;
+
+    // Adicionar elementos
+    toast.textContent = message;
+    toast.appendChild(progressBar);
+    toastContainer.appendChild(toast);
+
+    // Animação de entrada
+    setTimeout(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(0)';
+    }, 10);
+
+    // Remover após a duração
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+
+    // Adicionar estilos dinamicamente (apenas uma vez)
+    if (!document.getElementById('toast-styles')) {
+        const style = document.createElement('style');
+        style.id = 'toast-styles';
+        style.textContent = `
+            @keyframes progress {
+                from { transform: scaleX(1); }
+                to { transform: scaleX(0); }
+            }
+            
+            .toast-success { background: #28a745 !important; }
+            .toast-error { background: #dc3545 !important; }
+            .toast-warning { background: #ffc107 !important; color: #000 !important; }
+            .toast-info { background: #17a2b8 !important; }
+            
+            .toast-success div { background: #218838 !important; }
+            .toast-error div { background: #c82333 !important; }
+            .toast-warning div { background: #e0a800 !important; }
+            .toast-info div { background: #138496 !important; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Adicionar classe de tipo
+    if (type !== 'info') {
+        toast.classList.add(`toast-${type}`);
+    }
 }
 
 async function verificarPaginas() {
