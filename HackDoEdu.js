@@ -298,34 +298,136 @@ class RateLimitedQueue {
     }
 }
 
+// Função para criar e mostrar toasts
+function showToast(message, type = 'info', duration = 3000) {
+    const toastContainer = document.getElementById('toast-container') || createToastContainer();
+    
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <div class="toast-content">
+            <div class="toast-message">${message}</div>
+            <div class="toast-progress"></div>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    // Animação de entrada
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+    
+    // Remover após a duração
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }, duration);
+    
+    // Barra de progresso
+    const progress = toast.querySelector('.toast-progress');
+    progress.style.animation = `progress ${duration}ms linear forwards`;
+}
+
+// Função para criar o container de toasts se não existir
+function createToastContainer() {
+    const toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    document.body.appendChild(toastContainer);
+    
+    // Adicionar estilos CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .toast {
+            background: #333;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            max-width: 300px;
+            overflow: hidden;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .toast-success {
+            background: #28a745;
+        }
+        
+        .toast-error {
+            background: #dc3545;
+        }
+        
+        .toast-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .toast-info {
+            background: #17a2b8;
+        }
+        
+        .toast-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            width: 100%;
+            background: rgba(255,255,255,0.3);
+        }
+        
+        @keyframes progress {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+        
+        .toast-message {
+            margin-bottom: 5px;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    return toastContainer;
+}
+
 async function verificarPaginas() {
     console.log('Script Feito Por Eduardo Safra');
-    
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999;';
-    
-    const spinner = document.createElement('div');
-    spinner.style.cssText = 'border: 16px solid #f3f3f3; border-radius: 50%; border-top: 16px solid #3498db; width: 120px; height: 120px; animation: spin 2s linear infinite; margin-bottom: 20px;';
-    
-    const title = document.createElement('div');
-    title.style.cssText = 'color: white; font-size: 24px; font-weight: bold; text-align: center;';
-    title.textContent = 'Processando atividades...';
-    
-    const status = document.createElement('div');
-    status.style.cssText = 'color: white; font-size: 18px; margin-top: 10px;';
-    
-    const style = document.createElement('style');
-    style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
-    
-    document.head.appendChild(style);
-    overlay.appendChild(spinner);
-    overlay.appendChild(title);
-    overlay.appendChild(status);
-    document.body.appendChild(overlay);
+    showToast('Iniciando processamento das atividades...', 'info', 2000);
     
     const activities = document.querySelectorAll('li.activity');
     const pagePromises = [];
     const examLinks = [];
+    
+    // Contar atividades pendentes
+    let pendingActivities = 0;
+    activities.forEach(activity => {
+        const link = activity.querySelector('a.aalink');
+        const completion = activity.querySelector('.completion-dropdown button');
+        
+        if (link && link.href && (!completion || !completion.classList.contains('btn-success'))) {
+            pendingActivities++;
+        }
+    });
+    
+    showToast(`Encontradas ${pendingActivities} atividades pendentes`, 'info', 2000);
     
     activities.forEach(activity => {
         const link = activity.querySelector('a.aalink');
@@ -343,35 +445,48 @@ async function verificarPaginas() {
                         nome: name
                     });
                 } else {
-                    pagePromises.push(marcarPaginaComoConcluida(id, name));
+                    pagePromises.push(
+                        marcarPaginaComoConcluida(id, name)
+                            .then(() => showToast(`Concluído: ${name}`, 'success'))
+                            .catch(() => showToast(`Falha ao concluir: ${name}`, 'error'))
+                    );
                 }
             }
         }
     });
     
-    status.textContent = 'Marcando ' + pagePromises.length + ' atividades como concluídas...';
     await Promise.all(pagePromises);
     
     const examCount = examLinks.length;
     
-    for (let i = 0; i < examCount; i++) {
-        const exam = examLinks[i];
-        status.textContent = 'Processando exame ' + (i + 1) + '/' + examCount + ': "' + exam.nome + '"';
+    if (examCount > 0) {
+        showToast(`Iniciando ${examCount} exames/atividades...`, 'warning', 2000);
         
-        try {
-            await do_exam(exam.href);
-        } catch (error) {
-            console.error('Erro ao processar exame:', error);
-        }
-        
-        if (i < examCount - 1) {
-            await new Promise(resolve => setTimeout(resolve, 3000));
+        for (let i = 0; i < examCount; i++) {
+            const exam = examLinks[i];
+            showToast(`Processando (${i+1}/${examCount}): ${exam.nome}`, 'info', 2500);
+            
+            try {
+                await do_exam(exam.href);
+                showToast(`Concluído: ${exam.nome}`, 'success');
+            } catch (error) {
+                console.error('Erro ao processar exame:', error);
+                showToast(`Falha em: ${exam.nome}`, 'error');
+            }
+            
+            if (i < examCount - 1) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
         }
     }
     
-    document.body.removeChild(overlay);
+    showToast('Todas atividades processadas!', 'success', 3000);
     console.log('Atividades Finalizadas! | Caso Sobrar alguma execute denovo');
-    location.reload();
+    
+    // Recarregar a página após 3 segundos
+    setTimeout(() => {
+        location.reload();
+    }, 3000);
 }
 
 verificarPaginas();
