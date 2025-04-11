@@ -305,9 +305,10 @@ function showToast(message, type = 'info', duration = 5000) {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
-        <div class="toast-icon"></div>
-        <div class="toast-message">${message}</div>
-        <div class="toast-progress"></div>
+        <span class="toast-message">${message}</span>
+        <div class="progress">
+            <div class="progress-bar"></div>
+        </div>
     `;
     
     toastContainer.appendChild(toast);
@@ -317,6 +318,12 @@ function showToast(message, type = 'info', duration = 5000) {
         toast.classList.add('show');
     }, 10);
     
+    // Barra de progresso - reinicia animação
+    const progressBar = toast.querySelector('.progress-bar');
+    progressBar.style.animation = 'none';
+    void progressBar.offsetWidth; // força reflow
+    progressBar.style.animation = `progressBar ${duration}ms linear forwards`;
+    
     // Remover após a duração
     setTimeout(() => {
         toast.classList.remove('show');
@@ -324,19 +331,15 @@ function showToast(message, type = 'info', duration = 5000) {
             toast.remove();
         }, 300);
     }, duration);
-    
-    // Barra de progresso
-    const progress = toast.querySelector('.toast-progress');
-    progress.style.animation = `progress ${duration}ms linear forwards`;
 }
 
-// Função para criar o container de toasts com estilos modernos
+// Função para criar o container de toasts com o estilo especificado
 function createToastContainer() {
     const toastContainer = document.createElement('div');
     toastContainer.id = 'toast-container';
     document.body.appendChild(toastContainer);
     
-    // Adicionar estilos CSS melhorados
+    // Adicionar estilos CSS conforme seu exemplo
     const style = document.createElement('style');
     style.textContent = `
         #toast-container {
@@ -346,26 +349,20 @@ function createToastContainer() {
             z-index: 9999;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            pointer-events: none;
+            gap: 10px;
         }
         
         .toast {
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
-            color: white;
-            padding: 12px 16px;
+            position: relative;
+            background: #333;
+            color: #fff;
+            padding: 16px 24px;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
             opacity: 0;
-            transform: translateY(20px);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1);
-            max-width: 250px;
-            overflow: hidden;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            max-width: 300px;
         }
         
         .toast.show {
@@ -373,58 +370,41 @@ function createToastContainer() {
             transform: translateY(0);
         }
         
-        .toast-success {
-            background: rgba(40, 167, 69, 0.9);
-        }
-        
-        .toast-error {
-            background: rgba(220, 53, 69, 0.9);
-        }
-        
-        .toast-warning {
-            background: rgba(255, 193, 7, 0.9);
-            color: #212529;
-        }
-        
-        .toast-info {
-            background: rgba(23, 162, 184, 0.9);
-        }
-        
-        .toast-progress {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            height: 3px;
+        .toast .progress {
+            margin-top: 10px;
+            height: 4px;
             width: 100%;
-            background: rgba(255,255,255,0.4);
-            transform-origin: left;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            overflow: hidden;
         }
         
-        @keyframes progress {
-            from { transform: scaleX(1); }
-            to { transform: scaleX(0); }
+        .toast .progress-bar {
+            height: 100%;
+            width: 100%;
+            background: #6c5ce7;
         }
         
-        .toast-icon {
-            width: 20px;
-            height: 20px;
-            flex-shrink: 0;
+        @keyframes progressBar {
+            from { width: 100%; }
+            to { width: 0%; }
         }
         
-        .toast-success .toast-icon {
-            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+        /* Cores para diferentes tipos de toast */
+        .toast-success .progress-bar {
+            background: #28a745;
         }
         
-        .toast-error .toast-icon {
-            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/%3E%3C/svg%3E");
+        .toast-error .progress-bar {
+            background: #dc3545;
         }
         
-        .toast-warning .toast-icon {
-            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z'/%3E%3C/svg%3E");
+        .toast-warning .progress-bar {
+            background: #ffc107;
         }
         
-        .toast-info .toast-icon {
-            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z'/%3E%3C/svg%3E");
+        .toast-info .progress-bar {
+            background: #17a2b8;
         }
     `;
     document.head.appendChild(style);
