@@ -132,34 +132,30 @@
       menu.appendChild(title);
 
       const funcs = [
-        { name: 'Tarefas SP', status: 'iframe', url: 'https://doritus.mmrcoss.tech/' },
+        { name: 'Tarefas SP', status: 'maintenance' },
         { name: 'Expansão SP', status: 'load', url: 'https://raw.githubusercontent.com/Slashzinmaker/SPHACK/refs/heads/main/HackDoEdu.js' },
         { name: 'Speak SP', status: 'load', url: 'https://speakify.cupiditys.lol/api/bookmark.js' },
         { name: 'Redação SP', status: 'load', url: 'https://raw.githubusercontent.com/Slashzinmaker/SPHACK/refs/heads/main/Redacao.js' },
         { name: 'Provas Paulista SP', status: 'maintenance' },
-        { name: 'Menu 2.0', status: 'maintenance' },
+        { name: 'IA S9K', status: 'load', url: 'https://chat.s9k.store' }, // Alteração feita aqui
         { name: 'Khan Academy', status: 'load', url: 'https://raw.githubusercontent.com/iUnknownBr/KhanDestroyer/refs/heads/main/KhanDestroyer.js' },
       ];
 
       funcs.forEach(func => {
         const btn = document.createElement('button');
-        btn.textContent = func.status === 'load' ? `Ativar ${func.name}` : func.status === 'iframe' ? `Abrir ${func.name}` : `${func.name} (Manutenção)`;
+        btn.textContent = func.status === 'load' ? `Ativar ${func.name}` : `${func.name} (Manutenção)`;
         btn.className = 'sp-button' + (func.status === 'maintenance' ? ' maintenance' : '');
         btn.onclick = () => {
           if (func.status === 'maintenance') {
             showToast(`${func.name} está em manutenção`);
-          } else if (func.status === 'iframe' && func.url) {
-            openIframeModal(func.name, func.url);
           } else if (func.url) {
-            fetch(`${func.url}?${Math.random()}`)
-              .then(r => r.text())
-              .then(code => eval(code))
-              .catch(err => alert('Erro ao carregar script: ' + err));
+            loadIframe(func.url); // Função para carregar o iframe com o site
           }
         };
         menu.appendChild(btn);
       });
 
+      // BOTÃO PARA MOSTRAR OPÇÕES AVANÇADAS
       const toggleAdvanced = document.createElement('button');
       toggleAdvanced.textContent = 'Avançado';
       toggleAdvanced.className = 'sp-button';
@@ -262,50 +258,15 @@
         setTimeout(() => toast.style.opacity = '0', 4000);
       }
 
-      function openIframeModal(title, url) {
-        const iframeWrapper = document.createElement('div');
-        Object.assign(iframeWrapper.style, {
-          position: 'fixed',
-          top: '0',
-          left: '0',
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)',
-          zIndex: 1000001,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          flexDirection: 'column'
-        });
-
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Fechar';
-        Object.assign(closeBtn.style, {
-          marginBottom: '10px',
-          padding: '8px 16px',
-          background: '#d63031',
-          border: 'none',
-          color: '#fff',
-          borderRadius: '8px',
-          fontWeight: 'bold',
-          cursor: 'pointer',
-          boxShadow: '0 0 10px #d63031aa'
-        });
-        closeBtn.onclick = () => iframeWrapper.remove();
-
+      function loadIframe(url) {
         const iframe = document.createElement('iframe');
         iframe.src = url;
-        Object.assign(iframe.style, {
-          width: '90%',
-          height: '85%',
-          border: '2px solid #fff',
-          borderRadius: '12px',
-          boxShadow: '0 0 30px rgba(255, 255, 255, 0.2)'
-        });
-
-        iframeWrapper.appendChild(closeBtn);
-        iframeWrapper.appendChild(iframe);
-        document.body.appendChild(iframeWrapper);
+        iframe.style.width = '100%';
+        iframe.style.height = '500px';
+        iframe.style.border = 'none';
+        iframe.style.borderRadius = '10px';
+        iframe.style.marginTop = '20px';
+        menu.appendChild(iframe);
       }
 
       document.body.appendChild(menu);
@@ -318,4 +279,4 @@
     window.addEventListener('DOMContentLoaded', initMenu);
   }
 })();
-                       
+                                       
