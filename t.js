@@ -1,6 +1,6 @@
 (function () {
   function initMenu() {
-    if (document.getElementById('spHackMenu') || document.getElementById('spHamburger')) return;
+    if (document.getElementById('spHackMenu') || document.getElementById('spLogo')) return;
 
     const settings = {
       title: localStorage.getItem('spTitle') || 'SP Hack Menu',
@@ -8,33 +8,32 @@
       backgroundColor: localStorage.getItem('spBackground') || 'radial-gradient(circle at center, rgba(20,20,30,0.98), rgba(10,10,20,0.95))'
     };
 
-    const burger = document.createElement('div');
-    burger.id = 'spHamburger';
-    Object.assign(burger.style, {
+    // Substituir o menu hambúrguer pela logo
+    const logo = document.createElement('img');
+    logo.id = 'spLogo';
+    logo.src = 'https://marketplace.s9k.store/imgs/logo.png';
+    Object.assign(logo.style, {
       position: 'fixed',
       top: '15px',
       left: '15px',
-      width: '30px',
-      height: '25px',
+      width: '40px',
+      height: '40px',
       cursor: 'pointer',
       zIndex: 1000000,
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between'
+      borderRadius: '50%',
+      boxShadow: '0 0 10px rgba(0,0,0,0.5)',
+      transition: 'transform 0.3s ease'
     });
-    for (let i = 0; i < 3; i++) {
-      const line = document.createElement('div');
-      Object.assign(line.style, {
-        height: '4px',
-        background: '#fff',
-        borderRadius: '2px',
-        transition: '0.3s',
-      });
-      burger.appendChild(line);
-    }
-    document.body.appendChild(burger);
+    document.body.appendChild(logo);
 
-    burger.onclick = () => {
+    logo.onmouseenter = () => {
+      logo.style.transform = 'scale(1.1)';
+    };
+    logo.onmouseleave = () => {
+      logo.style.transform = 'scale(1)';
+    };
+
+    logo.onclick = () => {
       const menu = document.getElementById('spHackMenu');
       if (menu) {
         menu.remove();
@@ -86,7 +85,7 @@
           background: linear-gradient(to right, ${settings.primaryColor}, #8e44ad);
           color: white;
           border: none;
-          border-radius: 12px;
+          border-radius: '12px';
           box-shadow: 0 0 12px ${settings.primaryColor}66;
           transition: all 0.3s ease;
         }
@@ -117,6 +116,33 @@
           font-size: 13px;
           color: #bbb;
         }
+        .sp-iframe-container {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0,0,0,0.9);
+          z-index: 1000001;
+          display: flex;
+          flex-direction: column;
+        }
+        .sp-iframe-header {
+          padding: 10px;
+          background: #222;
+          display: flex;
+          justify-content: flex-end;
+        }
+        .sp-iframe-close {
+          color: white;
+          font-size: 24px;
+          cursor: pointer;
+          padding: 0 10px;
+        }
+        .sp-iframe-content {
+          flex: 1;
+          border: none;
+        }
       `;
       document.head.appendChild(style);
 
@@ -137,7 +163,7 @@
         { name: 'Speak SP', status: 'load', url: 'https://speakify.cupiditys.lol/api/bookmark.js' },
         { name: 'Redação SP', status: 'load', url: 'https://raw.githubusercontent.com/Slashzinmaker/SPHACK/refs/heads/main/Redacao.js' },
         { name: 'Provas Paulista SP', status: 'maintenance' },
-        { name: 'IA S9K', status: 'load', url: 'https://chat.s9k.store' }, // Alteração feita aqui
+        { name: 'IA S9K', status: 'load', url: 'https://chat.s9k.store' },
         { name: 'Khan Academy', status: 'load', url: 'https://raw.githubusercontent.com/iUnknownBr/KhanDestroyer/refs/heads/main/KhanDestroyer.js' },
       ];
 
@@ -149,7 +175,11 @@
           if (func.status === 'maintenance') {
             showToast(`${func.name} está em manutenção`);
           } else if (func.url) {
-            loadIframe(func.url); // Função para carregar o iframe com o site
+            if (func.url.endsWith('.js')) {
+              loadScript(func.url);
+            } else {
+              loadExternalPage(func.url);
+            }
           }
         };
         menu.appendChild(btn);
@@ -258,15 +288,43 @@
         setTimeout(() => toast.style.opacity = '0', 4000);
       }
 
-      function loadIframe(url) {
+      function loadScript(url) {
+        const script = document.createElement('script');
+        script.src = url;
+        document.body.appendChild(script);
+        showToast(`Carregando ${url.split('/').pop()}...`);
+      }
+
+      function loadExternalPage(url) {
+        // Remove qualquer iframe existente
+        const existingFrame = document.getElementById('spExternalFrame');
+        if (existingFrame) existingFrame.remove();
+        
+        // Cria container para o iframe
+        const container = document.createElement('div');
+        container.className = 'sp-iframe-container';
+        container.id = 'spExternalFrame';
+        
+        // Cria header com botão de fechar
+        const header = document.createElement('div');
+        header.className = 'sp-iframe-header';
+        
+        const closeBtn = document.createElement('div');
+        closeBtn.className = 'sp-iframe-close';
+        closeBtn.textContent = '×';
+        closeBtn.onclick = () => container.remove();
+        
+        header.appendChild(closeBtn);
+        container.appendChild(header);
+        
+        // Cria iframe
         const iframe = document.createElement('iframe');
+        iframe.className = 'sp-iframe-content';
         iframe.src = url;
-        iframe.style.width = '100%';
-        iframe.style.height = '500px';
-        iframe.style.border = 'none';
-        iframe.style.borderRadius = '10px';
-        iframe.style.marginTop = '20px';
-        menu.appendChild(iframe);
+        iframe.allow = 'fullscreen';
+        container.appendChild(iframe);
+        
+        document.body.appendChild(container);
       }
 
       document.body.appendChild(menu);
@@ -279,4 +337,3 @@
     window.addEventListener('DOMContentLoaded', initMenu);
   }
 })();
-                                       
