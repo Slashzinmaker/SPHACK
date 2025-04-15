@@ -85,7 +85,7 @@
           background: linear-gradient(to right, ${settings.primaryColor}, #8e44ad);
           color: white;
           border: none;
-          border-radius: '12px';
+          border-radius: 12px;
           box-shadow: 0 0 12px ${settings.primaryColor}66;
           transition: all 0.3s ease;
         }
@@ -176,7 +176,7 @@
             showToast(`${func.name} está em manutenção`);
           } else if (func.url) {
             if (func.url.endsWith('.js')) {
-              loadScript(func.url);
+              loadScript(func.url, func.name);
             } else {
               loadExternalPage(func.url);
             }
@@ -288,11 +288,31 @@
         setTimeout(() => toast.style.opacity = '0', 4000);
       }
 
-      function loadScript(url) {
+      function loadScript(url, scriptName) {
+        showToast(`Carregando ${scriptName}...`);
+        
+        // Primeiro verifica se o script já foi carregado
+        const existingScript = document.querySelector(`script[src="${url}"]`);
+        if (existingScript) {
+          showToast(`${scriptName} já está carregado!`);
+          return;
+        }
+
+        // Cria um elemento script
         const script = document.createElement('script');
         script.src = url;
+        
+        // Adiciona eventos para monitorar o carregamento
+        script.onload = function() {
+          showToast(`${scriptName} carregado com sucesso!`);
+        };
+        
+        script.onerror = function() {
+          showToast(`Falha ao carregar ${scriptName}`);
+        };
+        
+        // Adiciona o script ao documento
         document.body.appendChild(script);
-        showToast(`Carregando ${url.split('/').pop()}...`);
       }
 
       function loadExternalPage(url) {
