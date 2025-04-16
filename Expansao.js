@@ -1,235 +1,389 @@
-// == CONFIGURAÇÕES PRINCIPAIS == //
+// == CONFIGURAÇÃO PRINCIPAL == //
 const CONFIG = {
   apiEndpoint: "https://scripts.dataharley.online/api.php?Pergunta=",
-  delayEntreQuestoes: 20000,      // 20 segundos entre questões (parecer humano)
-  delayAntesEnvio: 5000,          // 5 segundos antes de enviar
-  tentativasMaximas: 1,           // Não refaz questões
-  timeoutAPI: 10000               // 10 segundos timeout para API
+  timeoutAPI: 10000,              // 10 segundos timeout para API
+  defaultMinTime: 15000,          // 15 segundos mínimo por tarefa
+  defaultMaxTime: 30000           // 30 segundos máximo por tarefa
 };
 
-// == SISTEMA DE VERIFICAÇÃO == //
-const relatorio = {
-  inicio: new Date(),
-  totalQuestoes: 0,
-  respondidas: 0,
-  erros: 0,
-  detalhes: []
-};
+// == ELEMENTOS DA INTERFACE == //
+let menuInterface;
+let tempoMinimoInput;
+let tempoMaximoInput;
 
-// == FUNÇÃO PRINCIPAL == //
-async function responderQuestionario() {
-  try {
-    // 1. Validação do ambiente
-    if (!validarAmbienteMoodle()) return;
+// == VARIÁVEIS DE CONTROLE == //
+let tarefasDisponiveis = [];
+let tempoMinimo = CONFIG.defaultMinTime;
+let tempoMaximo = CONFIG.defaultMaxTime;
 
-    // 2. Identificação das questões
-    const questoes = identificarQuestoesMoodle();
-    relatorio.totalQuestoes = questoes.length;
-
-    if (questoes.length === 0) {
-      showToast("Nenhuma questão encontrada!", "error", 5000);
-      return;
-    }
-
-    showToast(`🔍 Encontradas ${questoes.length} questões. Iniciando...`, "info", 5000);
-
-    // 3. Processamento rigoroso
-    for (const [index, questao] of questoes.entries()) {
-      await processarQuestaoComIA(questao, index);
-      
-      // Delay humanizado entre questões
-      if (index < questoes.length - 1) {
-        await delay(CONFIG.delayEntreQuestoes + Math.random() * 5000);
-      }
-    }
-
-    // 4. Relatório final
-    exibirRelatorioIA();
-    showToast("✅ Processo concluído com respostas baseadas na IA!", "success", 8000);
-
-  } catch (erro) {
-    console.error("Erro no processamento:", erro);
-    showToast("❌ Ocorreu um erro - Verifique o console", "error", 8000);
+// == FUNÇÃO PRINCIPAL - INICIALIZAÇÃO == //
+function iniciarScript() {
+  if (!validarAmbienteMoodle()) return;
+  
+  // Remover interface anterior se existir
+  if (document.getElementById('auto-task-menu')) {
+    document.getElementById('auto-task-menu').remove();
   }
+
+  // Identificar tarefas disponíveis
+  tarefasDisponiveis = identificarTarefas();
+  
+  if (tarefasDisponiveis.length === 0) {
+    showToast("Nenhuma tarefa encontrada!", "error", 5000);
+    return;
+  }
+
+  // Criar interface
+  criarInterfaceSelecao();
 }
 
-// == FUNÇÕES DE PROCESSAMENTO == //
+// == FUNÇÕES DE INTERFACE == //
 
-async function processarQuestaoComIA(questao, index) {
-  const registro = {
-    questao: "",
-    status: "",
-    tempo: 0
+function criarInterfaceSelecao() {
+  // Criar container principal
+  menuInterface = document.createElement('div');
+  menuInterface.id = 'auto-task-menu';
+  menuInterface.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.3);
+    z-index: 99999;
+    max-width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    font-family: Arial, sans-serif;
+  `;
+
+  // Título
+  const titulo = document.createElement('h3');
+  titulo.textContent = 'Seletor de Tarefas Automático';
+  titulo.style.marginTop = '0';
+  menuInterface.appendChild(titulo);
+
+  // Controles de tempo
+  const tempoContainer = document.createElement('div');
+  tempoContainer.style.margin = '15px 0';
+  
+  const tempoLabel = document.createElement('label');
+  tempoLabel.textContent = 'Tempo por tarefa (segundos): ';
+  tempoLabel.style.marginRight = '10px';
+  tempoContainer.appendChild(tempoLabel);
+
+  const minLabel = document.createElement('span');
+  minLabel.textContent = 'Mín:';
+  minLabel.style.margin = '0 5px';
+  tempoContainer.appendChild(minLabel);
+
+  tempoMinimoInput = document.createElement('input');
+  tempoMinimoInput.type = 'number';
+  tempoMinimoInput.value = CONFIG.defaultMinTime / 1000;
+  tempoMinimoInput.min = '5';
+  tempoMinimoInput.max = '120';
+  tempoMinimoInput.style.width = '50px';
+  tempoContainer.appendChild(tempoMinimoInput);
+
+  const maxLabel = document.createElement('span');
+  maxLabel.textContent = 'Máx:';
+  maxLabel.style.margin = '0 5px';
+  tempoContainer.appendChild(maxLabel);
+
+  tempoMaximoInput = document.createElement('input');
+  tempoMaximoInput.type = 'number';
+  tempoMaximoInput.value = CONFIG.defaultMaxTime / 1000;
+  tempoMaximoInput.min = '10';
+  tempoMaximoInput.max = '180';
+  tempoMaximoInput.style.width = '50px';
+  tempoContainer.appendChild(tempoMaximoInput);
+
+  menuInterface.appendChild(tempoContainer);
+
+  // Lista de tarefas
+  const listaTarefas = document.createElement('div');
+  listaTarefas.style.margin = '15px 0';
+  
+  tarefasDisponiveis.forEach((tarefa, index) => {
+    const container = document.createElement('div');
+    container.style.marginBottom = '10px';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `task-${index}`;
+    checkbox.checked = true;
+    checkbox.style.marginRight = '10px';
+    
+    const label = document.createElement('label');
+    label.htmlFor = `task-${index}`;
+    label.textContent = `${tarefa.tipo}: ${tarefa.titulo.substring(0, 50)}${tarefa.titulo.length > 50 ? '...' : ''}`;
+    
+    container.appendChild(checkbox);
+    container.appendChild(label);
+    listaTarefas.appendChild(container);
+  });
+
+  menuInterface.appendChild(listaTarefas);
+
+  // Botões de ação
+  const botoesContainer = document.createElement('div');
+  botoesContainer.style.display = 'flex';
+  botoesContainer.style.justifyContent = 'space-between';
+  botoesContainer.style.marginTop = '20px';
+
+  const btnSelecionadas = document.createElement('button');
+  btnSelecionadas.textContent = 'Fazer Tarefas Selecionadas';
+  btnSelecionadas.style.padding = '10px 15px';
+  btnSelecionadas.style.background = '#4CAF50';
+  btnSelecionadas.style.color = 'white';
+  btnSelecionadas.style.border = 'none';
+  btnSelecionadas.style.borderRadius = '5px';
+  btnSelecionadas.style.cursor = 'pointer';
+  btnSelecionadas.onclick = () => {
+    tempoMinimo = tempoMinimoInput.value * 1000;
+    tempoMaximo = tempoMaximoInput.value * 1000;
+    executarTarefasSelecionadas();
   };
 
+  const btnTodas = document.createElement('button');
+  btnTodas.textContent = 'Fazer Todas Tarefas';
+  btnTodas.style.padding = '10px 15px';
+  btnTodas.style.background = '#2196F3';
+  btnTodas.style.color = 'white';
+  btnTodas.style.border = 'none';
+  btnTodas.style.borderRadius = '5px';
+  btnTodas.style.cursor = 'pointer';
+  btnTodas.onclick = () => {
+    tempoMinimo = tempoMinimoInput.value * 1000;
+    tempoMaximo = tempoMaximoInput.value * 1000;
+    executarTodasTarefas();
+  };
+
+  botoesContainer.appendChild(btnSelecionadas);
+  botoesContainer.appendChild(btnTodas);
+  menuInterface.appendChild(botoesContainer);
+
+  // Botão de fechar
+  const btnFechar = document.createElement('button');
+  btnFechar.textContent = 'Fechar';
+  btnFechar.style.marginTop = '15px';
+  btnFechar.style.padding = '8px 12px';
+  btnFechar.style.background = '#f44336';
+  btnFechar.style.color = 'white';
+  btnFechar.style.border = 'none';
+  btnFechar.style.borderRadius = '5px';
+  btnFechar.style.cursor = 'pointer';
+  btnFechar.onclick = () => menuInterface.remove();
+  menuInterface.appendChild(btnFechar);
+
+  // Adicionar ao documento
+  document.body.appendChild(menuInterface);
+
+  // Overlay
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 99998;
+  `;
+  overlay.id = 'auto-task-overlay';
+  overlay.onclick = () => {
+    menuInterface.remove();
+    overlay.remove();
+  };
+  document.body.appendChild(overlay);
+}
+
+// == FUNÇÕES DE EXECUÇÃO == //
+
+async function executarTarefasSelecionadas() {
+  // Fechar menu
+  document.getElementById('auto-task-menu').remove();
+  document.getElementById('auto-task-overlay').remove();
+
+  // Obter tarefas selecionadas
+  const tarefasSelecionadas = [];
+  
+  tarefasDisponiveis.forEach((tarefa, index) => {
+    const checkbox = document.getElementById(`task-${index}`);
+    if (checkbox && checkbox.checked) {
+      tarefasSelecionadas.push(tarefa);
+    }
+  });
+
+  if (tarefasSelecionadas.length === 0) {
+    showToast("Nenhuma tarefa selecionada!", "warning", 3000);
+    return;
+  }
+
+  // Executar tarefas
+  await executarTarefas(tarefasSelecionadas);
+}
+
+async function executarTodasTarefas() {
+  // Fechar menu
+  document.getElementById('auto-task-menu').remove();
+  document.getElementById('auto-task-overlay').remove();
+
+  // Executar todas as tarefas
+  await executarTarefas(tarefasDisponiveis);
+}
+
+async function executarTarefas(tarefas) {
+  showToast(`⏳ Iniciando ${tarefas.length} tarefas...`, "info", 3000);
+
+  for (const [index, tarefa] of tarefas.entries()) {
+    const inicio = new Date();
+    
+    try {
+      showToast(`🔍 Processando tarefa ${index+1}/${tarefas.length}...`, "info", 2000);
+
+      // Tempo mínimo de processamento
+      const tempoProcessamento = Math.floor(
+        Math.random() * (tempoMaximo - tempoMinimo) + tempoMinimo
+      );
+      
+      // Executar ação conforme o tipo de tarefa
+      if (tarefa.tipo === 'Questionário') {
+        await responderQuestionario(tarefa.url, tempoProcessamento);
+      } else {
+        await marcarTarefaComoConcluida(tarefa.url, tempoProcessamento);
+      }
+
+      showToast(`✅ Tarefa ${index+1} concluída!`, "success", 2000);
+
+    } catch (erro) {
+      console.error(`Erro na tarefa ${index+1}:`, erro);
+      showToast(`⚠️ Erro na tarefa ${index+1}`, "error", 3000);
+    }
+
+    // Aguardar tempo restante se necessário
+    const tempoDecorrido = new Date() - inicio;
+    if (tempoDecorrido < tempoMinimo) {
+      const tempoRestante = tempoMinimo - tempoDecorrido;
+      await delay(tempoRestante);
+    }
+
+    // Delay entre tarefas
+    if (index < tarefas.length - 1) {
+      const delayEntreTarefas = Math.floor(Math.random() * 5000) + 5000; // 5-10 segundos
+      await delay(delayEntreTarefas);
+    }
+  }
+
+  showToast("🎉 Todas tarefas concluídas!", "success", 5000);
+}
+
+// == FUNÇÕES ESPECÍFICAS == //
+
+function identificarTarefas() {
+  const tarefas = [];
+  
+  // Identificar questionários
+  document.querySelectorAll('li.activity.modtype_quiz').forEach(quiz => {
+    const link = quiz.querySelector('a.aalink');
+    if (link) {
+      tarefas.push({
+        tipo: 'Questionário',
+        titulo: link.textContent.trim(),
+        url: link.href
+      });
+    }
+  });
+
+  // Identificar tarefas simples
+  document.querySelectorAll('li.activity.modtype_resource').forEach(resource => {
+    const link = resource.querySelector('a.aalink');
+    if (link) {
+      tarefas.push({
+        tipo: 'Material',
+        titulo: link.textContent.trim(),
+        url: link.href
+      });
+    }
+  });
+
+  return tarefas;
+}
+
+async function responderQuestionario(url, tempoProcessamento) {
   const inicio = new Date();
-
+  
   try {
-    // 1. Extração precisa dos dados
-    const { pergunta, alternativas } = extrairDadosMoodle(questao);
-    registro.questao = pergunta.substring(0, 100) + (pergunta.length > 100 ? "..." : "");
+    // 1. Acessar questionário
+    const response = await fetch(url, { credentials: 'include' });
+    const html = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
 
-    showToast(`🧠 Consultando IA: Questão ${index+1}...`, "info", 3000);
+    // 2. Extrair dados
+    const pergunta = doc.querySelector('.qtext')?.textContent.trim() || "";
+    const alternativas = Array.from(doc.querySelectorAll('.answer input[type="radio"]'))
+      .map(input => ({
+        elemento: input,
+        texto: input.closest('.answer')?.textContent.trim() || "",
+        valor: input.value
+      }))
+      .filter(alt => alt.texto.length > 0);
 
-    // 2. Consulta à IA com timeout
-    const respostaIA = await Promise.race([
-      consultarIA(pergunta, alternativas),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout na API")), CONFIG.timeoutAPI)
-    ]);
+    if (!pergunta || alternativas.length === 0) {
+      throw new Error("Dados da questão não encontrados");
+    }
 
-    // 3. Processamento rigoroso da resposta
+    // 3. Consultar IA
+    const respostaIA = await consultarIA(pergunta, alternativas);
     const alternativaCorreta = processarRespostaIA(respostaIA, alternativas);
     
     if (!alternativaCorreta) {
-      throw new Error("IA não retornou resposta válida");
+      throw new Error("Resposta da IA inválida");
     }
 
-    // 4. Seleção segura
+    // 4. Selecionar resposta
     await selecionarResposta(alternativaCorreta);
-    registro.status = "✅ Respondida pela IA";
-    relatorio.respondidas++;
+
+    // 5. Aguardar tempo mínimo
+    const tempoDecorrido = new Date() - inicio;
+    if (tempoDecorrido < tempoProcessamento) {
+      await delay(tempoProcessamento - tempoDecorrido);
+    }
 
   } catch (erro) {
-    console.error(`Erro na questão ${index+1}:`, erro);
-    registro.status = `❌ ${erro.message}`;
-    relatorio.erros++;
-  } finally {
-    registro.tempo = Math.round((new Date() - inicio) / 1000);
-    relatorio.detalhes.push(registro);
+    throw erro;
   }
 }
 
-// == FUNÇÕES ESPECÍFICAS MOODLE == //
+async function marcarTarefaComoConcluida(url, tempoProcessamento) {
+  const inicio = new Date();
+  
+  try {
+    // Simular acesso à tarefa
+    await fetch(url, { credentials: 'include' });
+    
+    // Aguardar tempo mínimo
+    const tempoDecorrido = new Date() - inicio;
+    if (tempoDecorrido < tempoProcessamento) {
+      await delay(tempoProcessamento - tempoDecorrido);
+    }
+  } catch (erro) {
+    throw erro;
+  }
+}
+
+// == FUNÇÕES UTILITÁRIAS == //
 
 function validarAmbienteMoodle() {
-  if (!document.querySelector('.que.multichoice')) {
-    showToast("⚠️ Ambiente Moodle não detectado", "error", 5000);
-    return false;
-  }
-  return true;
+  return !!document.querySelector('.que.multichoice') || 
+         !!document.querySelector('li.activity.modtype_quiz');
 }
-
-function identificarQuestoesMoodle() {
-  return Array.from(document.querySelectorAll('.que.multichoice'))
-    .filter(q => !q.querySelector('.state')?.textContent.includes('Completo'));
-}
-
-function extrairDadosMoodle(container) {
-  const pergunta = container.querySelector('.qtext')?.textContent.trim() || "";
-  
-  const alternativas = Array.from(container.querySelectorAll('.answer input[type="radio"]'))
-    .map(input => ({
-      elemento: input,
-      texto: input.closest('.answer')?.textContent.trim() || "",
-      valor: input.value
-    }))
-    .filter(alt => alt.texto.length > 0);
-
-  return { pergunta, alternativas };
-}
-
-// == FUNÇÕES DE IA == //
-
-async function consultarIA(pergunta, alternativas) {
-  const prompt = `ANÁLISE DE QUESTÃO MOODLE - FORMATO EXATO
-
-  **INSTRUÇÕES:**
-  1. Analise a pergunta abaixo
-  2. Responda APENAS com o texto EXATO de uma das alternativas fornecidas
-  3. Não invente respostas
-
-  **PERGUNTA:**
-  ${pergunta}
-
-  **ALTERNATIVAS DISPONÍVEIS:**
-  ${alternativas.map(alt => `- ${alt.texto}`).join('\n')}
-
-  **RESPOSTA (TEXTO EXATO DA ALTERNATIVA CORRETA):**`;
-
-  const response = await fetch(`${CONFIG.apiEndpoint}${encodeURIComponent(prompt)}`);
-  const data = await response.json();
-  
-  return data.resposta;
-}
-
-function processarRespostaIA(respostaIA, alternativas) {
-  if (!respostaIA) return null;
-
-  // Busca exata (case insensitive)
-  const alternativaExata = alternativas.find(alt => 
-    alt.texto.toLowerCase() === respostaIA.toLowerCase()
-  );
-
-  if (alternativaExata) return alternativaExata;
-
-  // Busca por similaridade estrita
-  let melhorAlternativa = null;
-  let maiorSimilaridade = 0;
-
-  alternativas.forEach(alt => {
-    const similaridade = calcularSimilaridade(respostaIA, alt.texto);
-    if (similaridade > maiorSimilaridade && similaridade > 0.9) {
-      maiorSimilaridade = similaridade;
-      melhorAlternativa = alt;
-    }
-  });
-
-  return melhorAlternativa;
-}
-
-function calcularSimilaridade(str1, str2) {
-  const normalize = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const tokens1 = new Set(normalize(str1).split(/\W+/));
-  const tokens2 = new Set(normalize(str2).split(/\W+/));
-  const intersection = new Set([...tokens1].filter(t => tokens2.has(t)));
-  return intersection.size / Math.max(tokens1.size, tokens2.size);
-}
-
-// == FUNÇÕES DE INTERAÇÃO == //
-
-async function selecionarResposta(alternativa) {
-  // Clica no container pai (compatibilidade Moodle)
-  const container = alternativa.elemento.closest('.answer');
-  if (container) {
-    container.click();
-    await delay(1000);
-  }
-
-  // Dispara eventos necessários
-  alternativa.elemento.click();
-  alternativa.elemento.dispatchEvent(new Event('change', { bubbles: true }));
-
-  // Verificação final
-  await delay(2000);
-  if (!alternativa.elemento.checked) {
-    throw new Error("Falha ao selecionar alternativa");
-  }
-}
-
-// == UTILITÁRIOS == //
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function exibirRelatorioIA() {
-  console.group("📊 RELATÓRIO BASEADO EM IA");
-  console.log(`⏱ Tempo total: ${Math.round((new Date() - relatorio.inicio)/1000)}s`);
-  console.log(`📚 Questões: ${relatorio.totalQuestoes}`);
-  console.log(`✅ Respondidas: ${relatorio.respondidas}`);
-  console.log(`❌ Erros: ${relatorio.erros}`);
-  
-  console.groupCollapsed("🔍 Detalhes");
-  relatorio.detalhes.forEach((item, i) => {
-    console.log(
-      `#${i+1} (${item.tempo}s) ${item.status}\n` +
-      `"${item.questao}"\n` +
-      "―".repeat(80)
-    );
-  });
-  console.groupEnd();
-  console.groupEnd();
 }
 
 function showToast(mensagem, tipo = "info", duracao = 4000) {
@@ -280,7 +434,4 @@ function showToast(mensagem, tipo = "info", duracao = 4000) {
 }
 
 // == INICIALIZAÇÃO == //
-setTimeout(() => {
-  showToast("🔍 Iniciando processamento rigoroso...", "info", 3000);
-  setTimeout(responderQuestionario, 3000);
-}, 2000);
+iniciarScript();
