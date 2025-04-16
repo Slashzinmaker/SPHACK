@@ -1,287 +1,290 @@
 // == CONFIGURAÇÕES PRINCIPAIS == //
-// Atualize estas configurações:
 const CONFIG = {
   apiEndpoint: "https://scripts.dataharley.online/api.php?Pergunta=",
-  delayEntreQuestoes: 10000,      // 10 segundos entre questões
-  delayAntesEnvio: 5000,          // 5 segundos antes de enviar
-  tentativasMaximas: 3,           // 3 tentativas por questão
-  thresholdSimilaridade: 0.90,    // Exige 90% de correspondência
-  modoConservador: true           // Só responde quando tem certeza
+  delayMinimo: 15000,             // 15 segundos MÍNIMOS por questão
+  delayMaximo: 25000,             // 25 segundos MÁXIMOS por questão
+  tentativasMaximas: 2,           // Número de tentativas por questão
+  thresholdSimilaridade: 0.85,    // Exige 85% de correspondência
+  modoSeguro: true                // Só envia quando tem alta confiança
+};
+
+// == BANCO DE RESPOSTAS CONHECIDAS == //
+const BANCO_RESPOSTAS = {
+  "combinação perfeita entre Ethos, Pathos e Logos": "Um anúncio que usa estatísticas sobre pobreza, a história de uma família necessitada e a credibilidade de uma ONG renomada.",
+  // Adicione mais perguntas e respostas conhecidas aqui
 };
 
 // == SISTEMA DE RELATÓRIO == //
 const relatorio = {
+  inicio: new Date(),
   totalQuestoes: 0,
-  acertos: 0,
-  erros: 0,
+  respondidas: 0,
+  precisas: 0,
+  revisoesNecessarias: 0,
   detalhes: []
 };
 
 // == FUNÇÃO PRINCIPAL == //
 async function responderQuestionario() {
-  showToast("🔍 Analisando estrutura da página...", "info", 3000);
-  
-  // Identifica todas as questões do tipo "Pause e responda"
-  const questoes = identificarQuestoesExpansao();
-  relatorio.totalQuestoes = questoes.length;
-  
-  if (questoes.length === 0) {
-    showToast("Nenhuma questão encontrada!", "error", 3000);
-    return;
-  }
-
-  showToast(`Encontradas ${questoes.length} questões`, "success", 2000);
-
-  // Processa cada questão com tratamento de erro
-  for (const [index, questao] of questoes.entries()) {
-    let tentativa = 1;
-    let sucesso = false;
+  try {
+    // 1. Pré-verificação do ambiente
+    if (!validarAmbiente()) return;
     
-    while (tentativa <= CONFIG.tentativasMaximas && !sucesso) {
-      try {
-        showToast(`📝 Processando questão ${index+1}/${questoes.length} (Tentativa ${tentativa})`, "warning", 3500);
-        
-        // Extrai dados específicos do formato Expansão
-        const { pergunta, alternativas } = extrairDadosQuestaoExpansao(questao);
-        
-        // Consulta a API com contexto específico
-        const respostaIA = await consultarIAcomContexto(pergunta, alternativas);
-        if (!respostaIA) throw new Error("IA não retornou resposta válida");
-        
-        // Encontra a melhor correspondência
-        const melhorAlternativa = encontrarMelhorMatchExpansao(respostaIA, alternativas);
-        if (!melhorAlternativa) throw new Error("Nenhuma alternativa satisfatória");
-        
-        // Seleção e verificação robusta
-        await selecionarAlternativaExpansao(melhorAlternativa);
-        await new Promise(resolve => setTimeout(resolve, CONFIG.delayAntesEnvio));
-        
-        // Verificação final antes do envio
-        if (!verificarSelecaoExpansao(melhorAlternativa)) {
-          throw new Error("Falha na verificação pós-seleção");
-        }
-        
-        // Registra sucesso
-        relatorio.acertos++;
-        relatorio.detalhes.push({
-          questao: pergunta.substring(0, 100) + (pergunta.length > 100 ? "..." : ""),
-          resposta: melhorAlternativa.texto.substring(0, 50) + (melhorAlternativa.texto.length > 50 ? "..." : ""),
-          status: "✅ Acerto"
-        });
-        
-        sucesso = true;
-        showToast(`✔️ Questão ${index+1} respondida!`, "success", 3000);
-        
-      } catch (error) {
-        console.error(`Erro na tentativa ${tentativa}:`, error);
-        relatorio.erros++;
-        tentativa++;
-        
-        if (tentativa > CONFIG.tentativasMaximas) {
-          relatorio.detalhes.push({
-            questao: "Questão " + (index+1),
-            resposta: "N/A",
-            status: "❌ Falha após todas tentativas"
-          });
-          showToast(`⚠️ Questão ${index+1} não respondida`, "error", 3000);
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 3000));
+    // 2. Identificação das questões
+    const questoes = identificarQuestoes();
+    relatorio.totalQuestoes = questoes.length;
+    
+    if (questoes.length === 0) {
+      showToast("Nenhuma questão encontrada!", "error", 5000);
+      return;
+    }
+
+    showToast(`🔍 Encontradas ${questoes.length} questões. Iniciando...`, "info", 5000);
+
+    // 3. Processamento com timing inteligente
+    for (const [index, questao] of questoes.entries()) {
+      const tempoInicioQuestao = new Date();
+      
+      await processarQuestao(questao, index);
+      
+      // Delay adaptativo entre questões
+      const tempoProcessamento = new Date() - tempoInicioQuestao;
+      const delayNecessario = Math.max(
+        CONFIG.delayMinimo - tempoProcessamento, 
+        5000
+      );
+      
+      if (index < questoes.length - 1) {
+        showToast(`⏳ Preparando próxima questão (aguarde ${Math.round(delayNecessario/1000)}s)...`, "warning", 3000);
+        await delayAleatorio(delayNecessario, CONFIG.delayMaximo);
       }
     }
+
+    // 4. Relatório final
+    exibirRelatorioCompleto();
+    showToast("🎉 Processo concluído com segurança!", "success", 8000);
+
+  } catch (erro) {
+    console.error("Erro no processamento principal:", erro);
+    showToast("❌ Ocorreu um erro crítico - Verifique o console", "error", 8000);
+  }
+}
+
+// == FUNÇÕES DE PROCESSAMENTO == //
+
+async function processarQuestao(questao, index) {
+  let resultado = {
+    questao: "",
+    status: "",
+    tentativas: 0,
+    tempo: 0
+  };
+
+  const tempoInicio = new Date();
+  
+  try {
+    // 1. Extração dos dados
+    const { pergunta, alternativas } = extrairDadosQuestao(questao);
+    resultado.questao = pergunta.substring(0, 80) + (pergunta.length > 80 ? "..." : "");
     
-    // Aguarda antes da próxima questão
-    if (index < questoes.length - 1) {
-      const delayAleatorio = CONFIG.delayEntreQuestoes + Math.floor(Math.random() * 3000);
-      await new Promise(resolve => setTimeout(resolve, delayAleatorio));
+    // 2. Verificação do banco de respostas
+    let respostaCorreta = verificarBancoRespostas(pergunta);
+    
+    // 3. Consulta à IA se necessário
+    if (!respostaCorreta && CONFIG.modoSeguro) {
+      showToast(`🤖 Analisando questão ${index+1} com IA...`, "info", 4000);
+      respostaCorreta = await consultarIAcomContexto(pergunta, alternativas);
+      await delayAleatorio(3000, 5000); // Delay pós-consulta
     }
+
+    // 4. Validação e seleção
+    if (respostaCorreta) {
+      const alternativa = encontrarMelhorAlternativa(respostaCorreta, alternativas);
+      
+      if (alternativa) {
+        await selecionarAlternativa(alternativa);
+        resultado.status = "✅ Resposta precisa";
+        relatorio.precisas++;
+      } else {
+        resultado.status = "⚠️ Resposta não encontrada";
+        relatorio.revisoesNecessarias++;
+      }
+    } else {
+      resultado.status = "🔍 Necessita revisão manual";
+      relatorio.revisoesNecessarias++;
+    }
+
+    relatorio.respondidas++;
+    
+  } catch (erro) {
+    console.error(`Erro na questão ${index+1}:`, erro);
+    resultado.status = `❌ Erro: ${erro.message}`;
+  } finally {
+    resultado.tempo = Math.round((new Date() - tempoInicio)/1000);
+    resultado.tentativas++;
+    relatorio.detalhes.push(resultado);
+    
+    showToast(
+      `#${index+1} ${resultado.status} (${resultado.tempo}s)`, 
+      resultado.status.includes("✅") ? "success" : "warning", 
+      4000
+    );
+  }
+}
+
+// == FUNÇÕES AUXILIARES AVANÇADAS == //
+
+function validarAmbiente() {
+  if (!document.querySelector('.que.multichoice')) {
+    showToast("⚠️ Página não reconhecida como questionário", "error", 5000);
+    return false;
   }
   
-  // Exibe relatório final
-  exibirRelatorioFinal();
-  showToast("🎉 Processo concluído! Verifique o console para detalhes.", "success", 5000);
+  if (document.querySelector('#mod_quiz_navblock .thispage')) {
+    showToast("⚠️ Conclua a tentativa atual antes", "warning", 5000);
+    return false;
+  }
+  
+  return true;
 }
 
-// == FUNÇÕES ESPECÍFICAS PARA MOODLE EXPANSÃO == //
-
-// Identifica questões no formato Expansão
-function identificarQuestoesExpansao() {
-  const secoes = Array.from(document.querySelectorAll('h2')).filter(h2 => 
-    h2.textContent.includes("Pause e responda")
-  );
-  
-  return secoes.map(secao => {
-    const container = secao.closest('.activity') || secao.nextElementSibling;
-    return container?.querySelector('.que.multichoice') || container;
-  }).filter(Boolean);
+function identificarQuestoes() {
+  return Array.from(document.querySelectorAll('.que.multichoice'))
+    .filter(q => !q.querySelector('.state')?.textContent.includes('Completo'));
 }
 
-// Extrai dados do formato específico Expansão
-function extrairDadosQuestaoExpansao(container) {
-  // Extrai o texto principal da pergunta
-  const perguntaElement = container.querySelector('.qtext') || 
-                         container.querySelector('.question-text');
-  const pergunta = perguntaElement?.textContent.trim() || "Pergunta não identificada";
+function extrairDadosQuestao(container) {
+  const pergunta = container.querySelector('.qtext')?.textContent.trim() || "Pergunta não identificada";
   
-  // Extrai alternativas no formato Expansão
-  const alternativas = Array.from(container.querySelectorAll('.answer input[type="radio"]')).map(input => {
-    const label = input.closest('.answer')?.querySelector('label') ||
-                 document.querySelector(`label[for="${input.id}"]`);
-    
-    return {
+  const alternativas = Array.from(container.querySelectorAll('.answer input[type="radio"]'))
+    .map(input => ({
       elemento: input,
-      texto: label?.textContent.trim() || "",
+      texto: input.closest('.answer')?.textContent.trim() || "",
       valor: input.value
-    };
-  }).filter(alt => alt.texto); // Remove alternativas vazias
+    }))
+    .filter(alt => alt.texto.length > 0);
 
   return { pergunta, alternativas };
 }
 
-// Consulta IA com contexto específico para o Moodle Expansão
+function verificarBancoRespostas(pergunta) {
+  const perguntaNormalizada = pergunta.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, "");
+
+  for (const [key, value] of Object.entries(BANCO_RESPOSTAS)) {
+    const keyNormalizada = key.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s]/g, "");
+
+    if (perguntaNormalizada.includes(keyNormalizada) || 
+        calcularSimilaridade(perguntaNormalizada, keyNormalizada) > 0.9) {
+      return value;
+    }
+  }
+  return null;
+}
+
 async function consultarIAcomContexto(pergunta, alternativas) {
   try {
-    showToast("🧠 Consultando IA...", "info", 2000);
-    
-    // Formata o prompt para o formato Expansão
-    const prompt = `ANÁLISE DE QUESTÃO MOODLE EXPANSÃO - FORMATO "PAUSE E RESPONDA"
-    
-    **INSTRUÇÕES:**
-    1. Analise a pergunta e alternativas
-    2. Responda APENAS com o número da alternativa correta (1, 2, 3...)
-    3. Se não tiver certeza, responda "0"
-    
-    **PERGUNTA:**
-    ${pergunta}
-    
-    **ALTERNATIVAS:**
-    ${alternativas.map((alt, i) => `${i+1}. ${alt.texto}`).join('\n')}
-    
-    **RESPOSTA (APENAS NÚMERO):**`;
+    const prompt = `ANÁLISE DE QUESTÃO - MODO SEGURO\n\n` +
+      `Responda APENAS com o texto EXATO da alternativa correta dentre estas opções:\n\n` +
+      alternativas.map((alt, i) => `[${i+1}] ${alt.texto}`).join('\n') + 
+      `\n\nPergunta: ${pergunta}\n\nResposta:`;
     
     const response = await fetch(`${CONFIG.apiEndpoint}${encodeURIComponent(prompt)}`);
     const data = await response.json();
     
-    // Processa resposta da API
-    const respostaNumerica = parseInt(data.resposta.match(/\d+/)?.[0] || "0");
-    if (respostaNumerica > 0 && respostaNumerica <= alternativas.length) {
-      return alternativas[respostaNumerica-1].texto;
-    }
-    
-    return null;
+    return data.resposta;
   } catch (error) {
     console.error("Erro na consulta à IA:", error);
     return null;
   }
 }
 
-// Algoritmo de matching otimizado para o Expansão
-function encontrarMelhorMatchExpansao(respostaIA, alternativas) {
-  // Primeiro: busca por correspondência exata
-  for (const alt of alternativas) {
-    if (respostaIA.toLowerCase() === alt.texto.toLowerCase()) {
-      return alt;
-    }
-  }
-  
-  // Segundo: busca por inclusão
-  for (const alt of alternativas) {
-    if (respostaIA.toLowerCase().includes(alt.texto.toLowerCase()) || 
-        alt.texto.toLowerCase().includes(respostaIA.toLowerCase())) {
-      return alt;
-    }
-  }
-  
-  // Terceiro: calcula similaridade avançada
-  let melhorAlternativa = null;
-  let maiorPontuacao = 0;
+function encontrarMelhorAlternativa(resposta, alternativas) {
+  // 1. Busca exata
+  const exata = alternativas.find(alt => 
+    alt.texto.toLowerCase() === resposta.toLowerCase()
+  );
+  if (exata) return exata;
+
+  // 2. Busca por inclusão
+  const inclusao = alternativas.find(alt => 
+    alt.texto.toLowerCase().includes(resposta.toLowerCase()) ||
+    resposta.toLowerCase().includes(alt.texto.toLowerCase())
+  );
+  if (inclusao) return inclusao;
+
+  // 3. Similaridade avançada
+  let melhorAlt = null;
+  let melhorPontuacao = 0;
 
   alternativas.forEach(alt => {
-    const pontuacao = calcularSimilaridadeAvancada(respostaIA, alt.texto);
-    if (pontuacao > maiorPontuacao && pontuacao >= CONFIG.thresholdSimilaridade) {
-      maiorPontuacao = pontuacao;
-      melhorAlternativa = alt;
+    const pontuacao = calcularSimilaridade(resposta, alt.texto);
+    if (pontuacao > melhorPontuacao && pontuacao >= CONFIG.thresholdSimilaridade) {
+      melhorPontuacao = pontuacao;
+      melhorAlt = alt;
     }
   });
 
-  return melhorAlternativa;
+  return melhorAlt;
 }
 
-// Seleção robusta no DOM do Expansão
-async function selecionarAlternativaExpansao(alternativa) {
-  // Clica no elemento pai (compatibilidade com o formato Expansão)
-  const container = alternativa.elemento.closest('.answer') || 
-                   alternativa.elemento.parentElement;
-  
-  if (container) container.click();
-  
+function calcularSimilaridade(str1, str2) {
+  const set1 = new Set(str1.toLowerCase().split(/\W+/));
+  const set2 = new Set(str2.toLowerCase().split(/\W+/));
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  return intersection.size / Math.max(set1.size, set2.size);
+}
+
+async function selecionarAlternativa(alternativa) {
+  // Clica no container pai para garantir registro
+  const container = alternativa.elemento.closest('.answer');
+  if (container) {
+    container.click();
+    await delayAleatorio(500, 1000);
+  }
+
   // Dispara eventos necessários
+  alternativa.elemento.click();
   alternativa.elemento.dispatchEvent(new Event('change', { bubbles: true }));
   alternativa.elemento.dispatchEvent(new Event('click', { bubbles: true }));
   
-  await new Promise(resolve => setTimeout(resolve, 1500));
+  // Verificação final
+  await delayAleatorio(2000, 3000);
+  if (!alternativa.elemento.checked) {
+    throw new Error("Alternativa não foi marcada corretamente");
+  }
 }
 
-// Verificação reforçada de seleção
-function verificarSelecaoExpansao(alternativa) {
-  // Verifica de 3 formas diferentes
-  return alternativa.elemento.checked || 
-         document.querySelector(`input[type="radio"][value="${alternativa.valor}"]:checked`) ||
-         alternativa.elemento.closest('.answer')?.classList.contains('selected');
+function delayAleatorio(min, max) {
+  const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+  return new Promise(resolve => setTimeout(resolve, delay));
 }
 
-// == FUNÇÕES AUXILIARES AVANÇADAS == //
+// == RELATÓRIO E INTERFACE == //
 
-// Algoritmo de similaridade melhorado
-function calcularSimilaridadeAvancada(str1, str2) {
-  // Normalização avançada
-  const normalize = (str) => {
-    return str.toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-      .replace(/\b(e|a|o|os|as|do|da|dos|das|de|um|uma)\b/g, "") // Remove stopwords
-      .replace(/[^\w\s]/g, ""); // Remove pontuação
-  };
-
-  const str1Norm = normalize(str1);
-  const str2Norm = normalize(str2);
-
-  // Tokenização
-  const tokens1 = new Set(str1Norm.split(/\s+/));
-  const tokens2 = new Set(str2Norm.split(/\s+/));
-
-  // Cálculo de interseção
-  const intersection = new Set([...tokens1].filter(x => tokens2.has(x)));
-  const union = new Set([...tokens1, ...tokens2]);
-
-  // Ponderação por tamanho
-  const sizeWeight = 1 - Math.abs(tokens1.size - tokens2.size) / Math.max(tokens1.size, tokens2.size);
-  
-  return (intersection.size / union.size) * 0.7 + sizeWeight * 0.3;
-}
-
-// Exibe relatório detalhado no console
-function exibirRelatorioFinal() {
+function exibirRelatorioCompleto() {
   console.group("📊 RELATÓRIO DETALHADO - MOODLE EXPANSÃO");
-  console.log(`📝 Total de questões: ${relatorio.totalQuestoes}`);
-  console.log(`✅ Acertos: ${relatorio.acertos} (${((relatorio.acertos/relatorio.totalQuestoes)*100}%)`);
-  console.log(`❌ Erros: ${relatorio.erros}`);
+  console.log(`⏱ Tempo total: ${Math.round((new Date() - relatorio.inicio)/1000)}s`);
+  console.log(`📝 Questões encontradas: ${relatorio.totalQuestoes}`);
+  console.log(`✅ Respondidas com precisão: ${relatorio.precisas}`);
+  console.log(`⚠️ Necessitam revisão: ${relatorio.revisoesNecessarias}`);
   
   console.groupCollapsed("🔍 Detalhes por questão");
-  relatorio.detalhes.forEach((item, index) => {
+  relatorio.detalhes.forEach((item, i) => {
     console.log(
-      `#${index+1} ${item.status}\n` +
-      `Pergunta: ${item.questao}\n` +
-      `Resposta: ${item.resposta}\n` +
-      "―".repeat(50)
+      `#${i+1} (${item.tempo}s) ${item.status}\n` +
+      `"${item.questao}"\n` +
+      "―".repeat(80)
     );
   });
   console.groupEnd();
-  
   console.groupEnd();
 }
 
-// Sistema de notificações estilizadas
-function showToast(mensagem, tipo = "info", duracao = 3000) {
+function showToast(mensagem, tipo = "info", duracao = 4000) {
   const toast = document.createElement('div');
   toast.style.cssText = `
     position: fixed;
@@ -301,7 +304,7 @@ function showToast(mensagem, tipo = "info", duracao = 3000) {
     font-family: Arial, sans-serif;
     font-size: 14px;
     max-width: 300px;
-    animation: toastIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    animation: toastIn 0.4s ease-out;
   `;
   toast.textContent = mensagem;
   document.body.appendChild(toast);
@@ -311,18 +314,17 @@ function showToast(mensagem, tipo = "info", duracao = 3000) {
     setTimeout(() => toast.remove(), 400);
   }, duracao);
 
-  // Adiciona estilos de animação se não existirem
-  if (!document.getElementById('toast-animations')) {
+  if (!document.getElementById('toast-styles')) {
     const style = document.createElement('style');
-    style.id = 'toast-animations';
+    style.id = 'toast-styles';
     style.textContent = `
       @keyframes toastIn {
-        from { opacity: 0; transform: translateY(20px) scale(0.9); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
       }
       @keyframes toastOut {
-        from { opacity: 1; transform: translateY(0) scale(1); }
-        to { opacity: 0; transform: translateY(-20px) scale(0.9); }
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(-20px); }
       }
     `;
     document.head.appendChild(style);
@@ -330,22 +332,7 @@ function showToast(mensagem, tipo = "info", duracao = 3000) {
 }
 
 // == INICIALIZAÇÃO SEGURA == //
-(function() {
-  // Verifica se está na página correta
-  if (!document.querySelector('h2').textContent.includes("Pause e responda")) {
-    showToast("⚠️ Execute apenas em páginas de questionário", "error", 5000);
-    return;
-  }
-  
-  // Verifica se já há uma tentativa em andamento
-  if (document.querySelector('.mod_quiz-next-nav')) {
-    showToast("⚠️ Conclua a tentativa atual antes", "warning", 5000);
-    return;
-  }
-  
-  // Inicia após 3 segundos (tempo para carregar tudo)
-  setTimeout(() => {
-    showToast("🔄 Iniciando processamento...", "info", 2000);
-    setTimeout(responderQuestionario, 2000);
-  }, 3000);
-})();
+setTimeout(() => {
+  showToast("🔍 Iniciando processamento seguro...", "info", 3000);
+  setTimeout(responderQuestionario, 3000);
+}, 2000);
