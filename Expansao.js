@@ -1,151 +1,146 @@
 // == Configurações == //
 const DATAHARLEY_API = "https://scripts.dataharley.online/api.php?Pergunta=";
-const REQUEST_DELAY = 3000; // Delay entre requisições (evitar bloqueio)
+const DELAY_ENTRE_QUESTOES = 3000; // 3 segundos
 
-// == Função para consultar a API DataHarley == //
-async function consultarDataHarley(pergunta) {
-    try {
-        showToast('🔍 Consultando IA...', 'info', 2000);
-        
-        const response = await fetch(`${DATAHARLEY_API}${encodeURIComponent(pergunta)}`);
-        if (!response.ok) throw new Error("Erro na API");
-        
-        const data = await response.json();
-        return data.resposta; // Retorna a resposta formatada
-    } catch (error) {
-        console.error("Erro na API DataHarley:", error);
-        showToast("⚠️ API falhou, usando fallback...", "warning", 2000);
-        return null;
+// == Função Principal == //
+async function responderTodasQuestoes() {
+    showToast("🔍 Iniciando busca por questões...", "info");
+    
+    // Encontra todas as seções de "Pause e responda"
+    const secoesPause = Array.from(document.querySelectorAll('h2')).filter(h2 => 
+        h2.textContent.includes("Pause e responda")
+    );
+
+    if (secoesPause.length === 0) {
+        showToast("Nenhuma questão encontrada!", "error");
+        return;
     }
-}
 
-// == Função para extrair dados da questão == //
-async function extrairDadosQuestao(url) {
-    const response = await fetch(url, { credentials: 'include' });
-    const html = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    // Extrai o texto da pergunta
-    const questionText = doc.querySelector('.qtext')?.textContent.trim() || 
-                        doc.querySelector('.question')?.textContent.trim() || 
-                        "Pergunta não identificada";
-
-    // Extrai as opções (se for múltipla escolha)
-    const options = [];
-    doc.querySelectorAll('.answer input[type="radio"]').forEach((input, index) => {
-        const label = document.querySelector(`label[for="${input.id}"]`);
-        if (label) options.push({
-            name: input.name,
-            value: input.value,
-            text: label.textContent.trim()
-        });
-    });
-
-    // Extrai o ID da questão
-    const questId = Array.from(doc.querySelectorAll('input[type="hidden"]'))
-        .find(input => input.name.includes('sequencecheck'))?.name.split(':')[0];
-
-    return { questId, questionText, options };
-}
-
-// == Função para responder questão == //
-async function responderQuestao(url) {
-    try {
-        const { questId, questionText, options } = await extrairDadosQuestao(url);
+    for (const [index, secao] of secoesPause.entries()) {
+        const containerQuestao = secao.closest('.que.multichoice') || secao.nextElementSibling;
         
-        // Consulta a IA para obter a resposta correta
-        const respostaIA = await consultarDataHarley(questionText);
-        
-        if (!respostaIA) {
-            throw new Error("IA não retornou resposta válida");
+        if (!containerQuestao) continue;
+
+        try {
+            const { pergunta, alternativas } = extrairQuestao(containerQuestao);
+            showToast(`📝 Processando questão ${index + 1}...`, "warning");
+
+            const respostaIA = await consultarDataHarley(pergunta);
+            if (!respostaIA) throw new Error("IA não retornou resposta");
+
+            const alternativaCorreta = encontrarMelhorAlternativa(respostaIA, alternativas);
+            if (!alternativaCorreta) throw new Error("Alternativa não identificada");
+
+            await selecionarAlternativa(alternativaCorreta);
+            showToast(`✅ Selecionado: "${alternativaCorreta.texto}"`, "success");
+
+        } catch (error) {
+            showToast(`❌ Erro: ${error.message}`, "error");
         }
 
-        // Se for múltipla escolha, encontra a opção que melhor corresponde à resposta da IA
-        if (options.length > 0) {
-            let melhorOpcao = null;
-            let melhorPontuacao = 0;
-
-            // Compara cada opção com a resposta da IA
-            options.forEach(opcao => {
-                const pontuacao = calcularSimilaridade(respostaIA, opcao.text);
-                if (pontuacao > melhorPontuacao) {
-                    melhorPontuacao = pontuacao;
-                    melhorOpcao = opcao;
-                }
-            });
-
-            if (melhorOpcao) {
-                showToast(`✅ IA selecionou: "${melhorOpcao.text}"`, 'success', 3000);
-                await enviarResposta(questId, melhorOpcao.value);
-            } else {
-                throw new Error("Nenhuma opção corresponde à resposta da IA");
-            }
-        } 
-        // Se for questão dissertativa
-        else {
-            showToast(`📝 Resposta dissertativa: "${respostaIA.substring(0, 50)}..."`, 'info', 3000);
-            // Implemente aqui o envio de respostas dissertativas se necessário
-        }
-
-        return true;
-    } catch (error) {
-        showToast(`❌ Erro: ${error.message}`, 'error', 3000);
-        return false;
+        await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_QUESTOES));
     }
+
+    showToast("🎉 Todas questões respondidas!", "success");
 }
 
 // == Funções Auxiliares == //
 
-// Calcula similaridade entre strings (para encontrar a melhor opção)
-function calcularSimilaridade(str1, str2) {
-    const set1 = new Set(str1.toLowerCase().split(/\s+/));
-    const set2 = new Set(str2.toLowerCase().split(/\s+/));
-    const intersection = new Set([...set1].filter(x => set2.has(x)));
-    return intersection.size / Math.max(set1.size, set2.size);
-}
-
-// Envia a resposta para o servidor
-async function enviarResposta(questId, resposta) {
-    const formData = new FormData();
-    formData.append(`${questId}:sequencecheck`, '1');
-    formData.append(`${questId}:answer`, resposta);
-    formData.append('timeup', '0');
-
-    await fetch(window.location.href, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData
+// Extrai texto da pergunta e alternativas
+function extrairQuestao(container) {
+    const pergunta = container.querySelector('.qtext')?.textContent.trim() || 
+                     "Pergunta não identificada";
+    
+    const alternativas = Array.from(container.querySelectorAll('.answer label')).map(label => {
+        const input = label.previousElementSibling;
+        return {
+            elemento: input,
+            texto: label.textContent.trim(),
+            valor: input.value
+        };
     });
+
+    return { pergunta, alternativas };
 }
 
-// Mostra notificações estilizadas
-function showToast(message, type = 'info', duration = 3000) {
+// Consulta a API DataHarley
+async function consultarDataHarley(pergunta) {
+    try {
+        const response = await fetch(`${DATAHARLEY_API}${encodeURIComponent(pergunta)}`);
+        const data = await response.json();
+        return data.resposta;
+    } catch (error) {
+        console.error("Erro na API:", error);
+        return null;
+    }
+}
+
+// Encontra a alternativa que melhor corresponde à resposta da IA
+function encontrarMelhorAlternativa(respostaIA, alternativas) {
+    let melhorAlternativa = null;
+    let maiorSimilaridade = 0;
+
+    alternativas.forEach(alt => {
+        const similaridade = calcularSimilaridade(respostaIA, alt.texto);
+        if (similaridade > maiorSimilaridade) {
+            maiorSimilaridade = similaridade;
+            melhorAlternativa = alt;
+        }
+    });
+
+    return melhorAlternidade >= 0.4 ? melhorAlternativa : null; // Threshold mínimo de 40%
+}
+
+// Calcula similaridade entre strings
+function calcularSimilaridade(str1, str2) {
+    const palavras1 = str1.toLowerCase().split(/\s+/);
+    const palavras2 = str2.toLowerCase().split(/\s+/);
+    const palavrasComuns = palavras1.filter(palavra => palavras2.includes(palavra));
+    return palavrasComuns.length / Math.max(palavras1.length, palavras2.length);
+}
+
+// Seleciona a alternativa no DOM
+async function selecionarAlternativa(alternativa) {
+    alternativa.elemento.click();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Simula evento de change se necessário
+    const event = new Event('change', { bubbles: true });
+    alternativa.elemento.dispatchEvent(event);
+}
+
+// Exibe notificações
+function showToast(mensagem, tipo = "info", duracao = 3000) {
     const toast = document.createElement('div');
-    toast.style = `position:fixed;top:20px;right:20px;padding:12px;background:${
-        type === 'error' ? '#dc3545' : 
-        type === 'success' ? '#28a745' : 
-        type === 'warning' ? '#ffc107' : '#17a2b8'
-    };color:white;border-radius:4px;z-index:9999;`;
-    toast.textContent = message;
+    toast.style = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 16px;
+        background: ${tipo === "error" ? "#dc3545" : tipo === "success" ? "#28a745" : "#17a2b8"};
+        color: white;
+        border-radius: 4px;
+        z-index: 9999;
+        animation: fadeIn 0.3s;
+    `;
+    toast.textContent = mensagem;
     document.body.appendChild(toast);
 
-    setTimeout(() => toast.remove(), duration);
+    setTimeout(() => toast.remove(), duracao);
 }
 
-// == Execução Automática == //
-(async () => {
-    console.log("🟢 Script Iniciado (DataHarley API)");
-    showToast("🔎 Procurando questões pendentes...", "info", 2000);
+// == Inicialização == //
+(function() {
+    // Adiciona estilo CSS para os toasts
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    `;
+    document.head.appendChild(style);
 
-    const botoesResponder = Array.from(document.querySelectorAll('button.submit'));
-    for (const [index, botao] of botoesResponder.entries()) {
-        const url = botao.closest('form')?.action || window.location.href;
-        showToast(`📝 Processando questão ${index + 1}/${botoesResponder.length}`, "warning", 2000);
-        
-        await responderQuestao(url);
-        await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY));
-    }
-
-    showToast("🎉 Todas questões respondidas com precisão!", "success", 5000);
+    // Inicia após 2 segundos (tempo para carregar a página)
+    setTimeout(responderTodasQuestoes, 2000);
 })();
