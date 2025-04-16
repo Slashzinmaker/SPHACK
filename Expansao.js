@@ -4,7 +4,7 @@ const CONFIG = {
   delayEntreQuestoes: 7000,       // 7 segundos entre questões
   delayAntesEnvio: 4000,          // 4 segundos antes de enviar
   tentativasMaximas: 2,           // Número de tentativas por questão
-  thresholdSimilaridade: 0.75     // Exige 75% de correspondência
+  thresholdSimilaridade: 0.95     // Exige 75% de correspondência
 };
 
 // == SISTEMA DE RELATÓRIO == //
