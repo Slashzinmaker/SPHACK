@@ -1,10 +1,12 @@
 // == CONFIGURAÇÕES PRINCIPAIS == //
+// Atualize estas configurações:
 const CONFIG = {
   apiEndpoint: "https://scripts.dataharley.online/api.php?Pergunta=",
-  delayEntreQuestoes: 7000,       // 7 segundos entre questões
-  delayAntesEnvio: 4000,          // 4 segundos antes de enviar
-  tentativasMaximas: 2,           // Número de tentativas por questão
-  thresholdSimilaridade: 0.95     // Exige 75% de correspondência
+  delayEntreQuestoes: 10000,      // 10 segundos entre questões
+  delayAntesEnvio: 5000,          // 5 segundos antes de enviar
+  tentativasMaximas: 3,           // 3 tentativas por questão
+  thresholdSimilaridade: 0.90,    // Exige 90% de correspondência
+  modoConservador: true           // Só responde quando tem certeza
 };
 
 // == SISTEMA DE RELATÓRIO == //
