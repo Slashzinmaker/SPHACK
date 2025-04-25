@@ -197,9 +197,9 @@ async function get_ai_response(prompt) {
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
                     generationConfig: {
-                        temperature: 1,
-                        topP: 0.95,
-                        topK: 40,
+                        temperature: 0.7, // Reduzido para mais consistência
+                        topP: 0.9,
+                        topK: 30,
                         maxOutputTokens: 8192
                     }
                 })
@@ -248,20 +248,38 @@ async function verificarRedacao() {
             criteriosAvaliacao: criteriosAvaliacao
         };
 
-        // Prompt para a IA
+        // Prompt otimizado para redação nota 1000
         const prompt = `
-        Usando as informações a seguir sobre uma tarefa de redação, você precisa me fornecer:
-        1. Um título para a redação
-        2. O texto completo da redação
-        
-        **Formate sua resposta exatamente assim:**
-        TITULO: [Título da redação]
-        
-        TEXTO: [Texto da redação]
-        
-        Informações da redação: ${JSON.stringify(redacaoInfo)}`;
+        Você é um especialista em redação acadêmica com experiência em correção de ENEM e vestibulares. 
+        Sua tarefa é criar uma redação exemplar que atenda perfeitamente aos critérios de avaliação fornecidos.
 
-        showToast('Gerando redação com IA...', 'info');
+        **Instruções específicas:**
+        1. Analise cuidadosamente o gênero textual, a coletânea e os critérios de avaliação
+        2. Estruture a redação com:
+           - Introdução clara com tese bem definida
+           - 2-3 parágrafos de desenvolvimento com argumentação sólida
+           - Conclusão que retome a tese e proponha solução (se aplicável)
+        3. Utilize:
+           - Linguagem formal e culta, mas natural
+           - Coesão e coerência impecáveis
+           - Repertório sociocultural pertinente
+           - Proposta de intervenção detalhada (se necessário)
+
+        **Formato obrigatório da resposta:**
+        TITULO: [Título criativo e relevante]
+        
+        TEXTO: [Texto completo da redação com 25-30 linhas]
+
+        **Dados da redação:**
+        ${JSON.stringify(redacaoInfo, null, 2)}
+
+        **Dicas para nota máxima:**
+        - Use conectivos variados (não obstante, outrossim, todavia, etc.)
+        - Cite autores, filósofos ou dados estatísticos quando possível
+        - Mantenha uniformidade no nível de formalidade
+        - Evide repetições de palavras e ideias`;
+
+        showToast('Gerando redação nota 1000...', 'info');
 
         try {
             const aiResponse = await get_ai_response(prompt);
@@ -275,22 +293,46 @@ async function verificarRedacao() {
             const titulo = aiResponse.split('TITULO:')[1].split('TEXTO:')[0].trim();
             const texto = aiResponse.split('TEXTO:')[1].trim();
 
-            // Prompt para humanizar a redação
-            showToast('Humanizando redação...', 'info');
-            const humanizePrompt = `
-            Reescreva o seguinte texto acadêmico em português para que pareça escrito por um estudante humano, não por IA.
-            
-            Regras importantes:
-            1. Mantenha o conteúdo e os argumentos principais intactos
-            2. Adicione pequenas imperfeições naturais
-            3. Use linguagem mais natural e menos robótica
-            4. Varie o comprimento das frases
-            5. Preserve os parágrafos e a estrutura geral
-            
-            Texto para reescrever:
+            // Prompt para humanizar mantendo a qualidade
+            showToast('Otimizando redação...', 'info');
+            const refinePrompt = `
+            Aprimorar a seguinte redação mantendo seu potencial de nota máxima, mas adicionando:
+            1. Naturalidade de escrita humana
+            2. Pequenas variações gramaticais aceitáveis
+            3. Elementos de autoria (como expressões idiomáticas sutis)
+            4. Progressão discursiva mais orgânica
+
+            Mantenha:
+            - A estrutura argumentativa
+            - O nível vocabular
+            - Os elementos de repertório
+            - A proposta de intervenção (se aplicável)
+
+            Texto para refinar:
             ${texto}`;
 
-            const humanizedText = await get_ai_response(humanizePrompt);
+            const refinedText = await get_ai_response(refinePrompt);
+
+            // Verificação final de qualidade
+            const qualityCheckPrompt = `
+            Analise esta redação conforme os critérios:
+            1. Atendimento ao tema e gênero
+            2. Estrutura argumentativa
+            3. Coesão e coerência
+            4. Repertório sociocultural
+            5. Gramática e norma culta
+            6. Proposta de intervenção (se aplicável)
+
+            Dê uma estimativa de nota (0-1000) e sugira 3 melhorias pontuais se não for perfeita.
+
+            Texto:
+            ${refinedText}
+
+            Critérios originais:
+            ${redacaoInfo.criteriosAvaliacao}`;
+
+            const qualityReport = await get_ai_response(qualityCheckPrompt);
+            console.log('Relatório de qualidade:', qualityReport);
 
             // Insere o texto nos campos do formulário
             const textareas = document.querySelectorAll('textarea');
@@ -301,8 +343,13 @@ async function verificarRedacao() {
             await hackMUITextarea(textareas[0], titulo);
             
             setTimeout(async () => {
-                await hackMUITextarea(textareas[1], humanizedText);
-                showToast('Redação inserida com sucesso!', 'success', 3000);
+                await hackMUITextarea(textareas[1], refinedText);
+                showToast('Redação nota 1000 inserida com sucesso!', 'success', 3000);
+                
+                // Adiciona dicas de revisão
+                setTimeout(() => {
+                    showToast('Dica: Revise os conectivos e citações antes de enviar', 'info', 5000);
+                }, 3500);
             }, 1000);
 
         } catch (error) {
