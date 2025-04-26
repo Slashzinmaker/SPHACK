@@ -185,39 +185,44 @@ async function hackMUITextarea(textareaElement, textToInsert) {
 async function get_ai_response(prompt) {
     showToast('Solicitando resposta da IA...', 'info');
     
-    const apiKey = 'AIzaSyBmQYkaY_EUy4fM6PVj8l0H6QrzuD5ZWus';
-    const model = 'gemini-1.5-flash';
+    const apiKey = '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';
+    const model = 'deepseek/deepseek-chat:free';
     
     try {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        temperature: 0.7, // Reduzido para mais consistência
-                        topP: 0.9,
-                        topK: 30,
-                        maxOutputTokens: 8192
-                    }
-                })
-            }
-        );
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': window.location.href,
+                'X-Title': 'Redação Automática'
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: [{
+                    role: 'user',
+                    content: prompt
+                }],
+                temperature: 0.7,
+                max_tokens: 2048
+            })
+        });
 
-        if (!response.ok) throw new Error(`Erro na API: ${response.status}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `Erro na API: ${response.status}`);
+        }
 
         const data = await response.json();
         
-        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts) {
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
             throw new Error('Resposta inválida da API');
         }
 
         showToast('Resposta da IA recebida!', 'success');
-        return data.candidates[0].content.parts[0].text;
+        return data.choices[0].message.content;
     } catch (error) {
-        showToast('Falha ao obter resposta da IA', 'error');
+        showToast(`Falha ao obter resposta da IA: ${error.message}`, 'error');
         throw error;
     }
 }
@@ -228,12 +233,6 @@ async function verificarRedacao() {
     if (redacaoElement && redacaoElement.innerText.includes('Redação')) {
         // Mensagem de créditos
         showToast('Script por marcos10pc | discord.gg/platformdestroyer', 'info', 4000);
-
-        // Obtém ID da atividade da URL
-        const url = new URL(window.location.href);
-        const pathParts = url.pathname.split('/');
-        const activityId = pathParts.includes('atividade') ? 
-            pathParts[pathParts.indexOf('atividade') + 1] : null;
 
         // Coleta informações da redação
         const coletanea = document.querySelector('.css-1pvvm3t')?.textContent || '';
@@ -277,7 +276,7 @@ async function verificarRedacao() {
         - Use conectivos variados (não obstante, outrossim, todavia, etc.)
         - Cite autores, filósofos ou dados estatísticos quando possível
         - Mantenha uniformidade no nível de formalidade
-        - Evide repetições de palavras e ideias`;
+        - Evite repetições de palavras e ideias`;
 
         showToast('Gerando redação nota 1000...', 'info');
 
