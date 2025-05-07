@@ -1,136 +1,205 @@
-async function responderQuestionario(url, tempoProcessamento) {
-  const inicio = new Date();
+// == CONFIGURAÇÃO PRINCIPAL == //
+const CONFIG = {
+  targetURL: "https://expansao.educacao.sp.gov.br/mod/quiz/attempt.php",
+  questionSelector: '.qtext p',
+  answerSelector: '.answer input[type="radio"]',
+  submitSelector: 'input[name="next"][type="submit"]'
+};
 
-  try {
-    // 1. Acessar questionário
-    const response = await fetch(url, { credentials: 'include' });
-    const html = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    // 2. Extrair dados
-    const pergunta = doc.querySelector('.qtext')?.textContent.trim() || "";
-    const alternativas = Array.from(doc.querySelectorAll('.answer input[type="radio"]'))
-      .map(input => ({
-        elemento: input,
-        texto: input.closest('.answer')?.textContent.trim() || "",
-        valor: input.value
-      }))
-      .filter(alt => alt.texto.length > 0);
-
-    if (!pergunta || alternativas.length === 0) {
-      throw new Error("Dados da questão não encontrados");
+// == FUNÇÃO PARA VERIFICAR E EXECUTAR == //
+function verificarEExecutar() {
+  // Verificar se a URL corresponde ao padrão
+  if (window.location.href.includes(CONFIG.targetURL) && 
+      window.location.href.includes("attempt=") && 
+      window.location.href.includes("cmid=")) {
+    
+    console.log("URL compatível detectada. Iniciando extração de dados...");
+    
+    // Extrair pergunta
+    const perguntaElement = document.querySelector(CONFIG.questionSelector);
+    const pergunta = perguntaElement ? perguntaElement.textContent.trim() : null;
+    
+    if (!pergunta) {
+      console.error("Pergunta não encontrada!");
+      return;
     }
-
-    // Mostrar preview da pergunta e alternativas
-    await mostrarPreviewPergunta(pergunta, alternativas);
-
-    // 3. Consultar IA
-    const respostaIA = await consultarIA(pergunta, alternativas);
-    const alternativaCorreta = processarRespostaIA(respostaIA, alternativas);
-
-    if (!alternativaCorreta) {
-      throw new Error("Resposta da IA inválida");
+    
+    // Extrair alternativas
+    const alternativasElements = document.querySelectorAll(CONFIG.answerSelector);
+    const alternativas = Array.from(alternativasElements).map(input => {
+      const labelElement = input.closest('.answer').querySelector('p');
+      return {
+        valor: input.value,
+        texto: labelElement ? labelElement.textContent.trim() : "",
+        elemento: input
+      };
+    }).filter(alt => alt.texto.length > 0);
+    
+    if (alternativas.length === 0) {
+      console.error("Nenhuma alternativa encontrada!");
+      return;
     }
-
-    // 4. Selecionar resposta
-    await selecionarResposta(alternativaCorreta);
-
-    // 5. Aguardar tempo mínimo
-    const tempoDecorrido = new Date() - inicio;
-    if (tempoDecorrido < tempoProcessamento) {
-      await delay(tempoProcessamento - tempoDecorrido);
-    }
-
-  } catch (erro) {
-    throw erro;
+    
+    // Mostrar dados extraídos no console
+    console.log("=== DADOS EXTRAÍDOS ===");
+    console.log("Pergunta:", pergunta);
+    console.log("Alternativas:");
+    alternativas.forEach((alt, index) => {
+      console.log(`${String.fromCharCode(97 + index)})`, alt.texto);
+    });
+    
+    // Criar interface de visualização
+    criarInterfacePreview(pergunta, alternativas);
+  } else {
+    console.log("URL não compatível. Script não será executado.");
   }
 }
 
-// Nova função para mostrar preview da pergunta
-async function mostrarPreviewPergunta(pergunta, alternativas) {
-  return new Promise((resolve) => {
-    // Criar overlay
-    const overlay = document.createElement('div');
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.7);
-      z-index: 99999;
+// == FUNÇÃO PARA CRIAR INTERFACE DE PREVIEW == //
+function criarInterfacePreview(pergunta, alternativas) {
+  // Criar overlay
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    z-index: 99999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  `;
+  
+  // Criar container principal
+  const container = document.createElement('div');
+  container.style.cssText = `
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  `;
+  
+  // Adicionar título
+  const titulo = document.createElement('h2');
+  titulo.textContent = 'Pré-visualização da Questão';
+  titulo.style.cssText = `
+    margin-top: 0;
+    color: #2c3e50;
+    text-align: center;
+  `;
+  container.appendChild(titulo);
+  
+  // Adicionar pergunta
+  const perguntaDiv = document.createElement('div');
+  perguntaDiv.textContent = pergunta;
+  perguntaDiv.style.cssText = `
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 5px;
+    font-weight: bold;
+    border-left: 4px solid #3498db;
+  `;
+  container.appendChild(perguntaDiv);
+  
+  // Adicionar alternativas
+  const alternativasTitle = document.createElement('h3');
+  alternativasTitle.textContent = 'Alternativas:';
+  alternativasTitle.style.margin = '20px 0 10px 0';
+  container.appendChild(alternativasTitle);
+  
+  const listaAlternativas = document.createElement('div');
+  
+  alternativas.forEach((alt, index) => {
+    const alternativaDiv = document.createElement('div');
+    alternativaDiv.style.cssText = `
+      margin: 10px 0;
+      padding: 10px;
+      background: #f1f1f1;
+      border-radius: 5px;
       display: flex;
-      justify-content: center;
       align-items: center;
     `;
     
-    // Criar container do preview
-    const previewContainer = document.createElement('div');
-    previewContainer.style.cssText = `
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      max-width: 80%;
-      max-height: 80vh;
-      overflow-y: auto;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    const letra = document.createElement('span');
+    letra.textContent = `${String.fromCharCode(97 + index)})`;
+    letra.style.cssText = `
+      font-weight: bold;
+      margin-right: 10px;
+      color: #e74c3c;
+      min-width: 20px;
     `;
     
-    // Adicionar título
-    const titulo = document.createElement('h3');
-    titulo.textContent = 'Preview da Pergunta';
-    titulo.style.marginTop = '0';
-    titulo.style.color = '#333';
-    previewContainer.appendChild(titulo);
+    const texto = document.createElement('span');
+    texto.textContent = alt.texto;
     
-    // Adicionar pergunta
-    const perguntaElement = document.createElement('div');
-    perguntaElement.textContent = pergunta;
-    perguntaElement.style.margin = '15px 0';
-    perguntaElement.style.fontWeight = 'bold';
-    perguntaElement.style.fontSize = '16px';
-    previewContainer.appendChild(perguntaElement);
-    
-    // Adicionar alternativas
-    const alternativasTitle = document.createElement('div');
-    alternativasTitle.textContent = 'Alternativas:';
-    alternativasTitle.style.margin = '10px 0 5px 0';
-    alternativasTitle.style.fontWeight = 'bold';
-    previewContainer.appendChild(alternativasTitle);
-    
-    const listaAlternativas = document.createElement('ul');
-    listaAlternativas.style.margin = '0 0 20px 0';
-    listaAlternativas.style.paddingLeft = '20px';
-    
-    alternativas.forEach((alt, index) => {
-      const item = document.createElement('li');
-      item.textContent = alt.texto;
-      item.style.margin = '5px 0';
-      listaAlternativas.appendChild(item);
-    });
-    
-    previewContainer.appendChild(listaAlternativas);
-    
-    // Botão de confirmação
-    const btnConfirmar = document.createElement('button');
-    btnConfirmar.textContent = 'Continuar';
-    btnConfirmar.style.cssText = `
-      padding: 10px 20px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 14px;
-    `;
-    btnConfirmar.onclick = () => {
-      overlay.remove();
-      resolve();
-    };
-    
-    previewContainer.appendChild(btnConfirmar);
-    overlay.appendChild(previewContainer);
-    document.body.appendChild(overlay);
+    alternativaDiv.appendChild(letra);
+    alternativaDiv.appendChild(texto);
+    listaAlternativas.appendChild(alternativaDiv);
   });
+  
+  container.appendChild(listaAlternativas);
+  
+  // Adicionar botões
+  const botoesDiv = document.createElement('div');
+  botoesDiv.style.cssText = `
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+  `;
+  
+  const btnCancelar = document.createElement('button');
+  btnCancelar.textContent = 'Cancelar';
+  btnCancelar.style.cssText = `
+    padding: 10px 20px;
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  `;
+  btnCancelar.onclick = () => {
+    overlay.remove();
+  };
+  
+  const btnContinuar = document.createElement('button');
+  btnContinuar.textContent = 'Continuar';
+  btnContinuar.style.cssText = `
+    padding: 10px 20px;
+    background: #2ecc71;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  `;
+  btnContinuar.onclick = () => {
+    overlay.remove();
+    // Aqui você pode adicionar a lógica para processar a resposta
+    console.log("Processando resposta...");
+    // Exemplo: selecionar a primeira alternativa
+    // alternativas[0].elemento.click();
+    // document.querySelector(CONFIG.submitSelector).click();
+  };
+  
+  botoesDiv.appendChild(btnCancelar);
+  botoesDiv.appendChild(btnContinuar);
+  container.appendChild(botoesDiv);
+  
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
 }
+
+// == EXECUTAR QUANDO A PÁGINA CARREGAR == //
+if (document.readyState === 'complete') {
+  verificarEExecutar();
+} else {
+  window.addEventListener('load', verificarEExecutar);
+    }
