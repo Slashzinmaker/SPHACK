@@ -1,211 +1,222 @@
--- ESP AUTOMÁTICO - SEM MENU
--- Ativa sozinho ao executar
+-- ============================================
+-- SCRIPT ESP AUTOMÁTICO COM VERIFICAÇÃO TOTAL
+-- ============================================
 
+-- Tenta criar notificação para o usuário
+local function notify(title, text, duration)
+    duration = duration or 3
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration
+        })
+    end)
+end
+
+-- 1. Verificar se o script está rodando
+print("[ESP] Script iniciado - Verifique o console (F9)")
+notify("🔧 Carregando", "Inicializando ESP...", 2)
+
+-- 2. Aguardar jogador e ambiente
 local player = game.Players.LocalPlayer
-local espActive = true
-local espColor = Color3.fromRGB(255, 0, 0) -- Vermelho padrão
-local espObjects = {}
+if not player then
+    warn("[ESP] Erro: LocalPlayer não encontrado")
+    notify("❌ Erro", "Jogador não localizado", 3)
+    return
+end
 
--- Criar ESP para um player
-local function createESPBox(targetPlayer)
-    if not targetPlayer or not targetPlayer.Character then
-        return nil
-    end
+-- Aguardar o personagem (importante para ESP)
+if not player.Character then
+    player.CharacterAdded:Wait()
+end
+
+-- 3. Configurações
+local espActive = true
+local espColor = Color3.fromRGB(255, 0, 0) -- vermelho
+local espList = {} -- armazena as ESPs ativas
+
+-- 4. Função para criar ESP em um player
+local function createESP(targetPlayer)
+    -- Verificações de segurança
+    if not targetPlayer or targetPlayer == player then return nil end
+    if not targetPlayer.Character then return nil end
     
     local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        return nil
-    end
+    if not hrp then return nil end
     
-    local espGui = Instance.new("BillboardGui")
-    espGui.Name = "ESP_" .. targetPlayer.Name
-    espGui.Size = UDim2.new(0, 4, 0, 5)
-    espGui.Adornee = hrp
-    espGui.AlwaysOnTop = true
-    espGui.Parent = hrp
+    -- Criar BillboardGui
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ESP_" .. targetPlayer.Name
+    billboard.Size = UDim2.new(0, 4, 0, 5)
+    billboard.Adornee = hrp
+    billboard.AlwaysOnTop = true
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
     
-    -- Caixa ao redor
-    local boxFrame = Instance.new("Frame")
-    boxFrame.Size = UDim2.new(1, 0, 1, 0)
-    boxFrame.BackgroundTransparency = 0.7
-    boxFrame.BackgroundColor3 = espColor
-    boxFrame.BorderSizePixel = 2
-    boxFrame.BorderColor3 = espColor
-    boxFrame.Parent = espGui
+    -- Caixa (frame)
+    local box = Instance.new("Frame")
+    box.Size = UDim2.new(1, 0, 1, 0)
+    box.BackgroundTransparency = 0.7
+    box.BackgroundColor3 = espColor
+    box.BorderSizePixel = 2
+    box.BorderColor3 = espColor
+    box.Parent = billboard
     
-    -- Nome do player
+    -- Nome do jogador
     local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(2, 0, 0, 22)
-    nameLabel.Position = UDim2.new(-0.5, 0, -1.2, -5)
+    nameLabel.Size = UDim2.new(1, 0, 0, 20)
+    nameLabel.Position = UDim2.new(0, 0, -1.2, 0)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = targetPlayer.Name
     nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLabel.TextSize = 13
+    nameLabel.TextSize = 14
     nameLabel.Font = Enum.Font.GothamBold
     nameLabel.TextStrokeTransparency = 0.3
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
-    nameLabel.Parent = espGui
+    nameLabel.Parent = billboard
     
     -- Distância (opcional)
-    local distanceLabel = Instance.new("TextLabel")
-    distanceLabel.Size = UDim2.new(2, 0, 0, 18)
-    distanceLabel.Position = UDim2.new(-0.5, 0, 0.5, 5)
-    distanceLabel.BackgroundTransparency = 1
-    distanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    distanceLabel.TextSize = 11
-    distanceLabel.Font = Enum.Font.Gotham
-    distanceLabel.TextStrokeTransparency = 0.5
-    distanceLabel.TextXAlignment = Enum.TextXAlignment.Center
-    distanceLabel.Parent = espGui
+    local distLabel = Instance.new("TextLabel")
+    distLabel.Size = UDim2.new(1, 0, 0, 18)
+    distLabel.Position = UDim2.new(0, 0, 1, 5)
+    distLabel.BackgroundTransparency = 1
+    distLabel.Text = "0"
+    distLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    distLabel.TextSize = 12
+    distLabel.Font = Enum.Font.Gotham
+    distLabel.Parent = billboard
     
-    -- Atualizar distância
-    local function updateDistance()
-        if not espActive or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+    -- Atualizar distância a cada frame
+    local heartbeat
+    heartbeat = game:GetService("RunService").Heartbeat:Connect(function()
+        if not billboard or not billboard.Parent then
+            if heartbeat then heartbeat:Disconnect() end
             return
         end
-        if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local distance = (player.Character.HumanoidRootPart.Position - targetPlayer.Character.HumanoidRootPart.Position).Magnitude
-            distanceLabel.Text = math.floor(distance) .. " studs"
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local dist = (player.Character.HumanoidRootPart.Position - targetPlayer.Character.HumanoidRootPart.Position).Magnitude
+            distLabel.Text = math.floor(dist) .. "s"
+        else
+            distLabel.Text = "?"
         end
-    end
-    
-    -- Loop de distância a cada 0.5 segundos
-    local connection
-    connection = game:GetService("RunService").Heartbeat:Connect(function()
-        if not espActive or not espGui.Parent then
-            connection:Disconnect()
-            return
-        end
-        updateDistance()
     end)
     
-    table.insert(espObjects, {gui = espGui, connection = connection})
-    return espGui
+    billboard.Parent = hrp
+    
+    -- Armazenar para limpeza posterior
+    table.insert(espList, {billboard = billboard, heartbeat = heartbeat})
+    return billboard
 end
 
--- Remover todas ESPs
+-- 5. Remover todas as ESPs
 local function removeAllESP()
-    for _, esp in pairs(espObjects) do
-        if esp.gui and esp.gui.Parent then
-            esp.gui:Destroy()
+    for _, item in ipairs(espList) do
+        if item.billboard and item.billboard.Parent then
+            item.billboard:Destroy()
         end
-        if esp.connection then
-            esp.connection:Disconnect()
+        if item.heartbeat then
+            item.heartbeat:Disconnect()
         end
     end
-    espObjects = {}
+    espList = {}
 end
 
--- Atualizar ESP para todos os players
-local function updateAllESP()
+-- 6. Atualizar ESP para todos os jogadores
+local function refreshESP()
     removeAllESP()
-    if not espActive then
-        return
-    end
+    if not espActive then return end
     
-    for _, plr in pairs(game.Players:GetPlayers()) do
+    for _, plr in ipairs(game.Players:GetPlayers()) do
         if plr ~= player then
-            createESPBox(plr)
+            createESP(plr)
         end
     end
 end
 
--- Quando um player entra
+-- 7. Eventos de entrada/saída/respawn
 game.Players.PlayerAdded:Connect(function(plr)
-    if not espActive then
-        return
-    end
+    if not espActive then return end
     plr.CharacterAdded:Connect(function()
-        task.wait(0.5)
+        task.wait(0.3)
         if espActive and plr ~= player then
-            createESPBox(plr)
+            createESP(plr)
         end
     end)
-    task.wait(0.5)
-    if espActive and plr ~= player then
-        createESPBox(plr)
+    if espActive then
+        task.wait(0.3)
+        createESP(plr)
     end
 end)
 
--- Quando um player sai
 game.Players.PlayerRemoving:Connect(function(plr)
-    for i, esp in pairs(espObjects) do
-        if esp.gui and esp.gui.Name == "ESP_" .. plr.Name then
-            if esp.gui.Parent then
-                esp.gui:Destroy()
-            end
-            if esp.connection then
-                esp.connection:Disconnect()
-            end
-            table.remove(espObjects, i)
+    for i, item in ipairs(espList) do
+        if item.billboard and item.billboard.Name == "ESP_" .. plr.Name then
+            item.billboard:Destroy()
+            if item.heartbeat then item.heartbeat:Disconnect() end
+            table.remove(espList, i)
             break
         end
     end
 end)
 
--- Monitorar respawn dos players existentes
-for _, plr in pairs(game.Players:GetPlayers()) do
+-- Respawn dos jogadores já existentes
+for _, plr in ipairs(game.Players:GetPlayers()) do
     if plr ~= player then
         plr.CharacterAdded:Connect(function()
-            task.wait(0.5)
+            task.wait(0.3)
             if espActive then
-                -- Remover ESP antiga se existir
-                for i, esp in pairs(espObjects) do
-                    if esp.gui and esp.gui.Name == "ESP_" .. plr.Name then
-                        if esp.gui.Parent then
-                            esp.gui:Destroy()
-                        end
-                        if esp.connection then
-                            esp.connection:Disconnect()
-                        end
-                        table.remove(espObjects, i)
-                        break
-                    end
-                end
-                createESPBox(plr)
+                createESP(plr)
             end
         end)
     end
 end
 
--- Inicializar ESP
-updateAllESP()
+-- 8. Iniciar ESP!
+refreshESP()
 
--- Comandos via chat (opcional - pode remover se não quiser)
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "🔴 ESP ATIVADO",
-    Text = "ESP automático ligado! Comandos: !esp ou !cor",
-    Duration = 3
-})
-
--- Comandos no chat (opcional)
-game:GetService("Players").LocalPlayer.Chatted:Connect(function(msg)
-    if msg:lower() == "!esp off" then
-        espActive = false
-        removeAllESP()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "🔴 ESP",
-            Text = "ESP desativado",
-            Duration = 2
-        })
-    elseif msg:lower() == "!esp on" then
-        espActive = true
-        updateAllESP()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "🟢 ESP",
-            Text = "ESP ativado",
-            Duration = 2
-        })
-    elseif msg:lower() == "!cor vermelho" then
-        espColor = Color3.fromRGB(255, 0, 0)
-        updateAllESP()
-    elseif msg:lower() == "!cor verde" then
-        espColor = Color3.fromRGB(0, 255, 0)
-        updateAllESP()
-    elseif msg:lower() == "!cor azul" then
-        espColor = Color3.fromRGB(0, 0, 255)
-        updateAllESP()
+-- 9. Feedback visual garantido (um botão flutuante simples para mostrar que rodou)
+local function criarIndicador()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "ESPLoadedIndicator"
+    screenGui.ResetOnSpawn = false
+    pcall(function()
+        screenGui.Parent = player.PlayerGui
+    end)
+    if not screenGui.Parent then
+        pcall(function()
+            screenGui.Parent = game:GetService("CoreGui")
+        end)
     end
-end)
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 120, 0, 30)
+    frame.Position = UDim2.new(1, -130, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.5
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "🔴 ESP ATIVO"
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 12
+    label.Font = Enum.Font.GothamBold
+    label.Parent = frame
+    
+    -- Desaparece após 5 segundos
+    task.wait(5)
+    frame:TweenSize(UDim2.new(0, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+    task.wait(0.3)
+    screenGui:Destroy()
+end
 
-print("✅ ESP Automático carregado!")
+task.spawn(criarIndicador)
+
+-- Notificação final
+notify("✅ ESP Ativado", "Caixas e nomes visíveis em outros jogadores", 3)
+print("[ESP] Script executado com sucesso! ESP ativo para todos os outros jogadores.")
